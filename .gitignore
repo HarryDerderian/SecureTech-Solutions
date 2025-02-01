@@ -1,0 +1,46 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.so
+*.dll
+*.dylib
+*.pyd
+
+# Virtual environment
+env/
+venv/
+
+# Environment variables & secrets
+.env
+*.key
+*.pem
+config.json  # If it contains sensitive data
+
+# Logs and debug
+logs/
+*.log
+debug.log
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Dependency directories
+node_modules/
+dist/
+build/
+
+# Cache
+*.cache
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Python packaging artifacts
+*.egg-info/
+*.egg

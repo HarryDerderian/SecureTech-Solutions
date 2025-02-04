@@ -51,15 +51,18 @@ class Server :
     async def handle_connection(self, client) :
         try:
             user = await self.initial_connect_prompt(client) # return the user 
-            if user  is None : print("We will disconnect that user")
+            if user is None : 
+                await self.disconnect(client)
+                return
             self.connected_clients[client] = user
             await self.chat_broadcast(f"{self.connected_clients[client].username} has joined the chat.", excluded_client=client)
             await self.messaging(client)
         except ConnectionClosed:
             print("Client disconnected.")
         finally: # will always run at no matter the outcome or the error raised for the client
-            await self.chat_broadcast(f"{self.connected_clients[client].username} has left the chat.", excluded_client=client)
-            del self.connected_clients[client] # very important we dont leave hanging clients, get em out of here
+            if client in self.connected_clients.keys() :
+                await self.chat_broadcast(f"{self.connected_clients[client].username} has left the chat.", excluded_client=client)
+                del self.connected_clients[client] # very important we dont leave hanging clients, get em out of here
             
     async def messaging(self, client) :
          async for message in client :
@@ -114,7 +117,7 @@ class Server :
     
     async def disconnect(self, client) :
         await client.send("You have been disconnected by the server.")
-        client.close()
+        await client.close()
 
 
 async def main() :

@@ -4,14 +4,18 @@ import sys
 class Client:
     def __init__(self):
         self.URI = "ws://localhost:7778"
-
+        
     async def receive_messages(self, websocket):
+        first_message = True  # Track the first message
         try:
             async for message in websocket:
                 sys.stdout.write("\r" + " " * 50 + "\r")  # Clear input line
                 print(message)
-                sys.stdout.write(">> ")  # Reprint the prompt
-                sys.stdout.flush()  # Ensure it appears immediately
+                if first_message:
+                    first_message = False  # Skip reprinting prompt on the first message
+                else:
+                    sys.stdout.write(">> ")
+                    sys.stdout.flush()
         finally:
             pass
 

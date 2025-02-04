@@ -34,13 +34,20 @@ class Server :
 
     # Asking the user if they want to login or register upon connection
     async def initial_connect_prompt(self, client) -> User:
-        await self.welcome_msg(client)
-        await client.send("Welcome to Secure Chat. Type 'L' to login or 'R' to register.")
-        response = await client.recv()
-        if response == "L" : 
-            user = await self.login(client)
-        else : 
-            user = await self.register(client)
+        # await self.welcome_msg(client)
+        valid = False
+        while(not valid) :
+            await client.send("Welcome to Secure Chat. Type 'L' to login or 'R' to register.")
+            response = await client.recv()
+            if response.upper() == "L" : 
+                user = await self.login(client)
+                valid = True
+            elif response.upper() == "R" : 
+                user = await self.register(client)
+                valid = True
+            else : 
+                await client.send("Invalid input. Please try again.")
+
         return user
 
     async def run(self):
@@ -51,7 +58,7 @@ class Server :
     async def handle_connection(self, client) :
         try:
             user = await self.initial_connect_prompt(client) # return the user 
-            # print(user.username + user.password)
+            if user  is None : print("We will disconnect that user")
             self.connected_clients.add(client)
             await self.messaging(client)
         except ConnectionClosed:
@@ -72,22 +79,28 @@ class Server :
          broadcast(self.connected_clients.difference({excluded_client}), message)
     
     async def login(self, client) :
-        # print("Login test")
-        await client.send("Enter your username: ")
-        username = await client.recv()
-        await client.send("Enter your password: ")
-        password = await client.recv()
+        print("Login test")
+        attempts = 3
+        while attempts > 0 :
+            await client.send("Enter your username: ")
+            username = await client.recv()
+            await client.send("Enter your password: ")
+            password = await client.recv()
 
-        cursor = self.db.cursor()
-        cursor.execute("SELECT * FROM users WHERE user = ? AND pass = ?", (username, password))
-        query = cursor.fetchone()
-        cursor.close()
+            cursor = self.db.cursor()
+            cursor.execute("SELECT * FROM users WHERE user = ? AND pass = ?", (username, password))
+            query = cursor.fetchone()
+            cursor.close()
+            if query is None :
+                await client.send("Invalid credentials. Please try again.")
+                attempts -= 1
+            else : 
+                user = User(username, password)
+                return user
 
-        user = User(username, password)
-
-        # print(user.username + user.password)
-
-        return user
+        print("Too many invalid attempts. Disconnecting user.")
+        
+        return None
 
         
 

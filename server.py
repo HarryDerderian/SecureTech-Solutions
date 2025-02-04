@@ -27,7 +27,7 @@ def initialize_db() :
 class Server :
 
     def __init__(self) :
-        self.connected_clients = set() # will change to a map of client : user
+        self.connected_clients = {} # will change to a map of client : user -- client
         self.PORT = 7778 
         self.HOST = "localhost"
         self.db = sqlite3.connect("securechat.db")
@@ -59,7 +59,7 @@ class Server :
         try:
             user = await self.initial_connect_prompt(client) # return the user 
             if user  is None : print("We will disconnect that user")
-            self.connected_clients.add(client)
+            self.connected_clients[client] = user
             await self.messaging(client)
         except ConnectionClosed:
             print("Client disconnected.")
@@ -70,13 +70,15 @@ class Server :
 
     async def messaging(self, client) :
          async for message in client :
+            username = self.connected_clients[client].username
+            message = f"{username}: {message}"
             await self.chat_broadcast(message, client)
 
     async def welcome_msg(self, client) :
         await client.send("Welcome to Secure Chat.")
     
     async def chat_broadcast(self, message, excluded_client = None):
-         broadcast(self.connected_clients.difference({excluded_client}), message)
+         broadcast(set(self.connected_clients.keys()).difference({excluded_client}), message)
     
     async def login(self, client) :
         print("Login test")

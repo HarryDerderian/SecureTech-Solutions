@@ -25,9 +25,8 @@ def initialize_db() :
 
 
 class Server :
-
     def __init__(self) :
-        self.connected_clients = {} # will change to a map of client : user -- client
+        self.connected_clients = {} 
         self.PORT = 7778 
         self.HOST = "localhost"
         self.db = sqlite3.connect("securechat.db")
@@ -47,7 +46,6 @@ class Server :
                 valid = True
             else : 
                 await client.send("Invalid input. Please try again.")
-
         return user
 
     async def run(self):
@@ -92,12 +90,13 @@ class Server :
             cursor = self.db.cursor()
             cursor.execute("SELECT * FROM users WHERE user = ? AND pass = ?", (username, password))
             query = cursor.fetchone()
-            cursor.close()
+            
             if query is None :
                 await client.send("Invalid credentials. Please try again.")
                 attempts -= 1
             else : 
                 user = User(username, password)
+                await client.send(f"Welcome back, {username}! 🔐\nYou are now securely connected to SecureChat. Enjoy your conversation!")
                 return user
 
         print("Too many invalid attempts. Disconnecting user.")
@@ -107,9 +106,14 @@ class Server :
         
 
     async def register(self, client) :
-        # print("Register test")
-        await client.send("Enter a username: ")
-        username = await client.recv()
+        cursor = self.db.cursor()
+        while True :
+            await client.send("Enter a username: ")
+            username = await client.recv()
+            cursor.execute("SELECT * FROM users WHERE user = ?", (username,))
+            if cursor.fetchone() is None : break
+            else : await client.send("username already taken.")
+        
         await client.send("Enter a password: ")
         password = await client.recv()
 
@@ -118,14 +122,12 @@ class Server :
         cursor = self.db.cursor()
         cursor.execute("INSERT INTO users VALUES (?, ?)", (username, password))
         cursor.close()
-        # cursor.execute("SELECT * FROM users")
-        # print(cursor.fetchall())
-
+        self.db.commit() # save the changes to the db
+        await client.send(f"Welcome to SecureChat, {username}! 🎉\nYou have successfully registered. Enjoy secure and private conversations!")
         return user
 
 
 async def main() :
-    # initialize_db()
     SecureChat = Server()
     await SecureChat.run()
 

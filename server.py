@@ -1,9 +1,28 @@
 import asyncio
+import sqlite3
 
 from websockets.asyncio.server import serve
 from websockets.asyncio.server import broadcast
 from websockets.exceptions import ConnectionClosed
 from websockets import serve
+
+class User :
+    def __init__(self, username, password) :
+        self.username = username
+        self.password = password
+
+
+def initialize_db() :
+    conn = sqlite3.connect("securechat.db")
+    cursor = conn.cursor()
+    cursor.execute("""CREATE TABLE users (
+                      user text,
+                      pass text
+                      )""")
+    
+    
+
+
 
 class Server :
 
@@ -11,6 +30,18 @@ class Server :
         self.connected_clients = set() # will change to a map of client : user
         self.PORT = 7778 
         self.HOST = "localhost"
+        self.db = sqlite3.connect("securechat.db")
+
+    # Asking the user if they want to login or register upon connection
+    async def initial_connect_prompt(self, client) -> User:
+        await self.welcome_msg(client)
+        await client.send("Welcome to Secure Chat. Type 'L' to login or 'R' to register.")
+        response = await client.recv()
+        if response == "L" : 
+            user = await self.login(client)
+        else : 
+            user = await self.register(client)
+        return user
 
     async def run(self):
         server = await serve(self.handle_connection, self.HOST, self.PORT)
@@ -19,8 +50,8 @@ class Server :
 
     async def handle_connection(self, client) :
         try:
-            await self.welcome_msg(client)
-            await self.login(client)
+            user = await self.initial_connect_prompt(client) # return the user 
+            # print(user.username + user.password)
             self.connected_clients.add(client)
             await self.messaging(client)
         except ConnectionClosed:
@@ -41,13 +72,45 @@ class Server :
          broadcast(self.connected_clients.difference({excluded_client}), message)
     
     async def login(self, client) :
-        pass
+        # print("Login test")
+        await client.send("Enter your username: ")
+        username = await client.recv()
+        await client.send("Enter your password: ")
+        password = await client.recv()
+
+        cursor = self.db.cursor()
+        cursor.execute("SELECT * FROM users WHERE user = ? AND pass = ?", (username, password))
+        query = cursor.fetchone()
+        cursor.close()
+
+        user = User(username, password)
+
+        # print(user.username + user.password)
+
+        return user
+
+        
 
     async def register(self, client) :
-        pass
+        # print("Register test")
+        await client.send("Enter a username: ")
+        username = await client.recv()
+        await client.send("Enter a password: ")
+        password = await client.recv()
+
+        user = User(username, password)
+
+        cursor = self.db.cursor()
+        cursor.execute("INSERT INTO users VALUES (?, ?)", (username, password))
+        cursor.close()
+        # cursor.execute("SELECT * FROM users")
+        # print(cursor.fetchall())
+
+        return user
 
 
 async def main() :
+    # initialize_db()
     SecureChat = Server()
     await SecureChat.run()
 

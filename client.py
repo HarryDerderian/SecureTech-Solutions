@@ -1,6 +1,6 @@
 import asyncio
 import websockets
-
+import sys
 class Client:
     def __init__(self):
         self.URI = "ws://localhost:7778"
@@ -8,13 +8,16 @@ class Client:
     async def receive_messages(self, websocket):
         try:
             async for message in websocket:
+                sys.stdout.write("\r" + " " * 50 + "\r")  # Clear input line
                 print(message)
+                sys.stdout.write(">> ")  # Reprint the prompt
+                sys.stdout.flush()  # Ensure it appears immediately
         finally:
             pass
 
     async def send_messages(self, websocket):
         while True:
-            message = await asyncio.to_thread(input)
+            message = await asyncio.to_thread(input, ">> ")
             await websocket.send(message)
 
     async def connect(self):

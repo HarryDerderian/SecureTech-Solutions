@@ -20,10 +20,6 @@ def initialize_db() :
                       pass text
                       )""")
     
-    
-
-
-
 class Server :
     def __init__(self) :
         self.connected_clients = {} 
@@ -33,7 +29,6 @@ class Server :
 
     # Asking the user if they want to login or register upon connection
     async def initial_connect_prompt(self, client) -> User:
-        # await self.welcome_msg(client)
         valid = False
         while(not valid) :
             await client.send("Welcome to Secure Chat. Type 'L' to login or 'R' to register.")
@@ -58,14 +53,14 @@ class Server :
             user = await self.initial_connect_prompt(client) # return the user 
             if user  is None : print("We will disconnect that user")
             self.connected_clients[client] = user
+            await self.chat_broadcast(f"{self.connected_clients[client].username} has joined the chat.", excluded_client=client)
             await self.messaging(client)
         except ConnectionClosed:
             print("Client disconnected.")
         finally: # will always run at no matter the outcome or the error raised for the client
-            self.connected_clients.discard(client) # very important we dont leave hanging clients, get em out of here
-            await self.chat_broadcast("User has left the chat.", excluded_client=client)
+            await self.chat_broadcast(f"{self.connected_clients[client].username} has left the chat.", excluded_client=client)
+            del self.connected_clients[client] # very important we dont leave hanging clients, get em out of here
             
-
     async def messaging(self, client) :
          async for message in client :
             username = self.connected_clients[client].username
@@ -79,31 +74,24 @@ class Server :
          broadcast(set(self.connected_clients.keys()).difference({excluded_client}), message)
     
     async def login(self, client) :
-        print("Login test")
         attempts = 3
+        cursor = self.db.cursor()
         while attempts > 0 :
             await client.send("Enter your username: ")
             username = await client.recv()
             await client.send("Enter your password: ")
             password = await client.recv()
-
-            cursor = self.db.cursor()
             cursor.execute("SELECT * FROM users WHERE user = ? AND pass = ?", (username, password))
-            query = cursor.fetchone()
-            
-            if query is None :
+            if cursor.fetchone() is None :
                 await client.send("Invalid credentials. Please try again.")
                 attempts -= 1
             else : 
                 user = User(username, password)
                 await client.send(f"Welcome back, {username}! 🔐\nYou are now securely connected to SecureChat. Enjoy your conversation!")
+                cursor.close()
                 return user
-
-        print("Too many invalid attempts. Disconnecting user.")
-        
+        cursor.close()
         return None
-
-        
 
     async def register(self, client) :
         cursor = self.db.cursor()
@@ -111,20 +99,22 @@ class Server :
             await client.send("Enter a username: ")
             username = await client.recv()
             cursor.execute("SELECT * FROM users WHERE user = ?", (username,))
-            if cursor.fetchone() is None : break
+            # Check that the username is not already taken.
+            if cursor.fetchone() is None : break 
             else : await client.send("username already taken.")
         
         await client.send("Enter a password: ")
         password = await client.recv()
-
         user = User(username, password)
-
-        cursor = self.db.cursor()
         cursor.execute("INSERT INTO users VALUES (?, ?)", (username, password))
         cursor.close()
         self.db.commit() # save the changes to the db
         await client.send(f"Welcome to SecureChat, {username}! 🎉\nYou have successfully registered. Enjoy secure and private conversations!")
         return user
+    
+    async def disconnect(self, client) :
+        await client.send("You have been disconnected by the server.")
+        client.close()
 
 
 async def main() :

@@ -33,6 +33,7 @@ class Server :
         while(not valid) :
             await client.send("Welcome to Secure Chat. Type 'L' to login or 'R' to register.")
             response = await client.recv()
+            print(response)
             if response.upper() == "L" : 
                 user = await self.login(client)
                 valid = True
@@ -51,9 +52,9 @@ class Server :
     async def handle_connection(self, client) :
         try:
             user = await self.initial_connect_prompt(client) # return the user 
-            if user is None : 
-                await self.disconnect(client)
-                return
+            if user is None : pass
+         #       await self.disconnect(client)
+                
             self.connected_clients[client] = user
             await self.chat_broadcast(f"{self.connected_clients[client].username} has joined the chat.", excluded_client=client)
             await self.messaging(client)

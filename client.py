@@ -2,10 +2,16 @@ import asyncio
 import websockets
 import sys
 import os
+import ssl
+import pathlib
+
 
 class Client:
     def __init__(self):
-        self.URI = "ws://localhost:7778"
+        self.URI = "wss://localhost:7778"
+        self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        self.localhost_pem = pathlib.Path(__file__).with_name("localhost.pem")
+        self.ssl_context.load_verify_locations(self.localhost_pem)
 
     async def receive_messages(self, websocket):
         first_message = True  # Track the first message
@@ -30,7 +36,7 @@ class Client:
         attempts = 3
         while True:
             try:
-                async with websockets.connect(self.URI) as websocket:
+                async with websockets.connect(self.URI, ssl=self.ssl_context) as websocket:
                     print("[+] Connected to server.")
                     receive_task = asyncio.create_task(self.receive_messages(websocket))
                     send_task = asyncio.create_task(self.send_messages(websocket))

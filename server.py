@@ -1,5 +1,7 @@
 import asyncio
 import sqlite3
+import ssl
+import pathlib
 
 from websockets.asyncio.server import serve
 from websockets.asyncio.server import broadcast
@@ -26,6 +28,9 @@ class Server :
         self.PORT = 7778 
         self.HOST = "localhost"
         self.db = sqlite3.connect("securechat.db")
+        self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        self.localhost_pem = pathlib.Path(__file__).with_name("localhost.pem")
+        self.ssl_context.load_cert_chain(self.localhost_pem)
 
     # Asking the user if they want to login or register upon connection
     async def initial_connect_prompt(self, client) -> User:
@@ -44,8 +49,8 @@ class Server :
         return user
 
     async def run(self):
-        server = await serve(self.handle_connection, self.HOST, self.PORT)
-        print(f"SecureTech Solutions: SecureChat\nServer listening on ws://{self.HOST}:{self.PORT}")
+        server = await serve(self.handle_connection, self.HOST, self.PORT, ssl = self.ssl_context)
+        print(f"SecureTech Solutions: SecureChat\nServer listening on wss://{self.HOST}:{self.PORT}")
         await server.wait_closed()
 
     async def handle_connection(self, client) :

@@ -145,6 +145,7 @@ class Server :
     async def disconnect(self, client) :
         await client.send("You have been disconnected by the server.")
         await client.close()
+        self.connections.remove(client)
 
 
 async def main() :

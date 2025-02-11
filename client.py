@@ -19,6 +19,7 @@ class Client:
         self.ssl_context.load_verify_locations(self.localhost_pem)
         self.ssl_context.check_hostname = False
         self.ssl_context.verify_mode = ssl.CERT_NONE
+        self.tmp = True
 
     async def receive_messages(self, websocket):
         try:
@@ -42,33 +43,22 @@ class Client:
     
     async def connect(self):
         attempts = 3
-        while True:
+
+        while self.tmp: 
             try:
                 async with websockets.connect(self.URI, ssl=self.ssl_context) as websocket:
                     self.ws = websocket
                     self.gui.update_chatbox("[+] Connected to server.")    
                     await self.receive_messages(self.ws)
-
-            except (websockets.exceptions.ConnectionClosedError, websockets.exceptions.ConnectionClosedOK, OSError):
+                    # edge case catching goes here <------
+            except Exception as e: # resolve better exception handling
+                    print(e)
                     self.gui.update_chatbox("[!] Connection failed. Retrying in 3s...")
-                    await asyncio.sleep(3)
+                    self.tmp = False
+                    #await asyncio.sleep(3)
 
     
     
-    async def heartbeat(self, attempts):
-        max_attempts = 30  # Prevent infinite wait time
-        while attempts < max_attempts:
-            for i in range(attempts, 0, -1):
-                os.system("cls" if os.name == "nt" else "clear")  # Clear console
-                print(f"[!] Connection lost. Retrying in {i} second{'s' if i > 1 else ''}...")
-                await asyncio.sleep(1)
-            
-            os.system("cls" if os.name == "nt" else "clear")  # Clear console before retry message
-            print("[!] Retrying now...")
-            return min(attempts * 2, max_attempts)
-
-        print("[!] Maximum retry limit reached. Giving up.")
-        return 3  # Reset attempts in case we want to restart later
 
 
 
@@ -155,7 +145,7 @@ class GUI:
             """Runs the asyncio event loop in a separate thread"""
             self.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.loop)
-            self.loop.run_until_complete(self.client.connect())\
+            self.loop.run_until_complete(self.client.connect())
 
         
         def on_enter_pressed(self, event):

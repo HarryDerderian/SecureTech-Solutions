@@ -1,5 +1,7 @@
 import asyncio
 import sqlite3
+import pathlib
+import ssl
 
 from websockets.asyncio.server import serve
 from websockets.asyncio.server import broadcast
@@ -23,9 +25,16 @@ def initialize_db() :
 class Server :
     def __init__(self) :
         self.connected_clients = {} 
+        self.connections = set()
         self.PORT = 7778 
         self.HOST = "localhost"
         self.db = sqlite3.connect("securechat.db")
+        self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        self.localhost_pem = pathlib.Path(__file__).with_name("localhost.pem")
+        self.ssl_context.load_cert_chain(self.localhost_pem)
+
+
+
 
     # Asking the user if they want to login or register upon connection
     async def initial_connect_prompt(self, client) -> User:
@@ -45,17 +54,34 @@ class Server :
         return user
 
     async def run(self):
-        server = await serve(self.handle_connection, self.HOST, self.PORT)
-        print(f"SecureTech Solutions: SecureChat\nServer listening on ws://{self.HOST}:{self.PORT}")
+        server = await serve(self.handle_connection, self.HOST, self.PORT, ssl = self.ssl_context)
+        print(f"SecureTech Solutions: SecureChat\nServer listening on wss://{self.HOST}:{self.PORT}")
         await server.wait_closed()
+
+    async def connection_limiting(self, client) :
+        if len(self.connections) == 1 :  
+            return False
+        for cli in self.connections :
+            if cli.remote_address[0] == client.remote_address[0] :
+                print("Client already connected.")
+
+                await client.send("You are already connected to the server.")
+                await self.disconnect(client)
+                return True
+        return False
 
     async def handle_connection(self, client) :
         try:
+            self.connections.add(client)
+            if(await self.connection_limiting(client)) :
+                return
             user = await self.initial_connect_prompt(client) # return the user 
             if user is None : pass
          #       await self.disconnect(client)
                 
             self.connected_clients[client] = user
+            if(await self.connection_limiting(client)) :
+                return
             await self.chat_broadcast(f"{self.connected_clients[client].username} has joined the chat.", excluded_client=client)
             await self.messaging(client)
         except ConnectionClosed:

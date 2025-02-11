@@ -2,7 +2,9 @@ import asyncio
 import websockets
 import sys
 import os
+import ssl
 import threading
+import pathlib
 
 from tkinter import Tk, Frame, Label, Entry, Button, Text, END
 
@@ -10,8 +12,13 @@ from tkinter import Tk, Frame, Label, Entry, Button, Text, END
 
 class Client:
     def __init__(self, gui):
-        self.URI = "ws://localhost:7778"
+        self.URI = "wss://localhost:7778"
+        self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         self.gui = gui
+        self.localhost_pem = pathlib.Path(__file__).with_name("localhost.pem")
+        self.ssl_context.load_verify_locations(self.localhost_pem)
+        self.ssl_context.check_hostname = False
+        self.ssl_context.verify_mode = ssl.CERT_NONE
 
     async def receive_messages(self, websocket):
         try:
@@ -37,7 +44,7 @@ class Client:
         attempts = 3
         while True:
             try:
-                async with websockets.connect(self.URI) as websocket:
+                async with websockets.connect(self.URI, ssl=self.ssl_context) as websocket:
                     self.ws = websocket
                     self.gui.update_chatbox("[+] Connected to server.")    
                     await self.receive_messages(self.ws)
@@ -81,6 +88,7 @@ class GUI:
             self._build_main_window()
             self._chatbox()
             self._input_box()
+            self._root.bind("<Return>", self.on_enter_pressed)
 
             self.client = Client(self)
             threading.Thread(target=self.run_asyncio_loop, daemon=True).start()
@@ -147,7 +155,12 @@ class GUI:
             """Runs the asyncio event loop in a separate thread"""
             self.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.loop)
-            self.loop.run_until_complete(self.client.connect())
+            self.loop.run_until_complete(self.client.connect())\
+
+        
+        def on_enter_pressed(self, event):
+            """Handles the Enter key being pressed"""
+            self._send_message()
 
 
 

@@ -22,30 +22,41 @@ class Client:
         self.connected = True
 
     async def receive_messages(self, websocket):
-        try:
             async for message in websocket:
                 self.gui.update_chatbox(message)
-        finally:
-            self.connected =False
-            print("disconnected")
+                self.connected = not message == "You have been disconnected by the server." # better checking required 
+
+
+            
 
     async def send_message(self, message):
-        if self.ws :
+        if self.ws and self.connected :
             await self.ws.send(message)
         else:
-            print("error")
             self.gui.update_chatbox("[!] Not connected to server.")
     
+    def is_ws_connected(self):
+        self.ws.recv()
+        return self.ws.connected
+
     async def connect(self):
         # The client should not reconnect if the server calls client.disconnect.......
-        print("connected called...")
+        timer = 3 # seconds
         while self.connected: 
             try:
                 async with websockets.connect(self.URI, ssl=self.ssl_context) as websocket:
                     self.ws = websocket
                     self.gui.update_chatbox("[+] Connected to server.")    
                     await self.receive_messages(self.ws)          
-            finally : pass
+            finally: # HEARTBEAT
+                tmp = timer
+                while tmp > 0 :
+                    self.gui.update_chatbox(f"[+] Connection lost... attempting to reonnect in {tmp}")
+                    await asyncio.sleep(1)
+                    tmp -= 1    
+                timer *= 2
+        print("end")
+
 
 class GUI:
         _BACKGROUND_COLOR = 'black'
@@ -113,9 +124,11 @@ class GUI:
             """Handles sending messages and updating the chat display"""
             message = self.input_entry.get().strip()
             if message:
-                self.update_chatbox("You: " + message)
-                self.input_entry.delete(0, END)  # Clear input field
-                future = asyncio.run_coroutine_threadsafe(self.client.send_message(message), self.loop)
+                if not self.client.connected : self.update_chatbox("[!] Not connected to server.")
+                else :
+                    self.update_chatbox("You: " + message)
+                    self.input_entry.delete(0, END)  # Clear input field
+                    future = asyncio.run_coroutine_threadsafe(self.client.send_message(message), self.loop)
 
         def run_asyncio_loop(self):
             """Runs the asyncio event loop in a separate thread"""

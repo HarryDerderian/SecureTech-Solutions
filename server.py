@@ -89,7 +89,9 @@ class Server :
             if(await self.connection_limiting(client)) : return
             
             user = await self.initial_connect_prompt(client) # return the user 
-            if user is None : pass
+            if user is None : 
+                await self.disconnect(client)
+                return
                 
             self.connected_clients[client] = user
             if(await self.connection_limiting(client)) :

@@ -1,7 +1,5 @@
 import asyncio
 import websockets
-import sys
-import os
 import ssl
 import threading
 import pathlib
@@ -9,9 +7,23 @@ import pathlib
 from tkinter import Tk, Frame, Label, Entry, Button, Text, END
 
 
+# TO-DO 
+# simple heartbeat aka pings according to google idk THIS MAY ALREADY BE DONE see last line of finished
+# combine pem file info into code aka hardcode it
+# only allow one instances of a user at one time aka you can only log in once per session no double harry
+# some basic Rate Limiting
+
+# Finished
+# Real-Time Messaging
+# Secure Connection
+# User Authentication
+# Detect and handle dropped connections gracefully (Join & Disconnect functionality)
+# Reconnect clients automatically in case of interruptions (e.g heartbeat functionality) 
+# NOTE google seems to think heartbeat isnt rejoining a user after a dc, hoping its wrong if thats the case ignore the todo for heartbeat
+
 
 class Client:
-    def __init__(self, gui):
+    def __init__(self, gui) :
         self.URI = "wss://localhost:7778"
         self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         self.gui = gui
@@ -19,44 +31,46 @@ class Client:
         self.ssl_context.load_verify_locations(self.localhost_pem)
         self.ssl_context.check_hostname = False
         self.ssl_context.verify_mode = ssl.CERT_NONE
+        self.ws = None  
         self.connected = True
+        self.server_dc = False
+        self.reconnect_attempts = 0  
 
-    async def receive_messages(self, websocket):
-            async for message in websocket:
-                self.gui.update_chatbox(message)
-                self.connected = not message == "You have been disconnected by the server." # better checking required 
-
-
-            
-
+    async def receive_messages(self):
+                async for message in self.ws:
+                    self.gui.update_chatbox(message)
+                    if message == "You have been disconnected by the server.":
+                            self.server_dc = True
+                            break
+                    
     async def send_message(self, message):
-        if self.ws and self.connected :
             await self.ws.send(message)
-        else:
-            self.gui.update_chatbox("[!] Not connected to server.")
-    
-    def is_ws_connected(self):
-        self.ws.recv()
-        return self.ws.connected
 
     async def connect(self):
-        # The client should not reconnect if the server calls client.disconnect.......
-        timer = 3 # seconds
-        while self.connected: 
-            try:
-                async with websockets.connect(self.URI, ssl=self.ssl_context) as websocket:
-                    self.ws = websocket
-                    self.gui.update_chatbox("[+] Connected to server.")    
-                    await self.receive_messages(self.ws)          
-            finally: # HEARTBEAT
-                tmp = timer
-                while tmp > 0 :
-                    self.gui.update_chatbox(f"[+] Connection lost... attempting to reonnect in {tmp}")
-                    await asyncio.sleep(1)
-                    tmp -= 1    
-                timer *= 2
-        print("end")
+             while not self.server_dc:
+                try:
+                    self.gui.update_chatbox("[+] Attempting to connect...")
+                    self.ws = await websockets.connect(self.URI, ssl=self.ssl_context)
+                    self.connected = True
+                    self.reconnect_attempts = 0  # Reset after a successful connection
+                    self.gui.update_chatbox("[+] Connected to server.")
 
+                    # start heartbeat or other tasks here.
+                    # For now, we simply await receiving messages.
+                    await self.receive_messages()
+                
+                except Exception as e:
+                   pass
+
+                finally: # attempt to reconnect as long as the server did not dc us aka we lost connection on our own
+                    if not self.server_dc :
+                        self.connected = False
+                        # Wait before reconnecting using exponential backoff
+                        wait_time = min(2 ** self.reconnect_attempts, 60)
+                        self.gui.update_chatbox(f"[+] Disconnected. Retrying in {wait_time} seconds...")
+                        await asyncio.sleep(wait_time)
+                        self.reconnect_attempts += 1
+             self.gui.update_chatbox("[!] Server has disconnected you.")
 
 class GUI:
         _BACKGROUND_COLOR = 'black'
@@ -124,11 +138,11 @@ class GUI:
             """Handles sending messages and updating the chat display"""
             message = self.input_entry.get().strip()
             if message:
-                if not self.client.connected : self.update_chatbox("[!] Not connected to server.")
+                if not self.client.connected or self.client.server_dc: self.update_chatbox("[!] Not connected to server.")
                 else :
                     self.update_chatbox("You: " + message)
-                    self.input_entry.delete(0, END)  # Clear input field
                     future = asyncio.run_coroutine_threadsafe(self.client.send_message(message), self.loop)
+                self.input_entry.delete(0, END)  # Clear input field
 
         def run_asyncio_loop(self):
             """Runs the asyncio event loop in a separate thread"""
@@ -139,10 +153,6 @@ class GUI:
         def on_enter_pressed(self, event):
             """Handles the Enter key being pressed"""
             self._send_message()
-
-
-
-
 
 async def main():
     gui = GUI()

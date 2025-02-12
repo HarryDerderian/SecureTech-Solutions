@@ -8,6 +8,22 @@ from websockets.asyncio.server import broadcast
 from websockets.exceptions import ConnectionClosed
 from websockets import serve
 
+
+# TO-DO 
+# simple heartbeat aka pings according to google idk THIS MAY ALREADY BE DONE see last line of finished
+# combine pem file info into code aka hardcode it
+# only allow one instances of a user at one time aka you can only log in once per session no double harry
+# some basic Rate Limiting
+
+# Finished
+# Real-Time Messaging
+# Secure Connection
+# User Authentication
+# Detect and handle dropped connections gracefully (Join & Disconnect functionality)
+# Reconnect clients automatically in case of interruptions (e.g heartbeat functionality) 
+# NOTE google seems to think heartbeat isnt rejoining a user after a dc, hoping its wrong if thats the case ignore the todo for heartbeat
+
+
 class User :
     def __init__(self, username, password) :
         self.username = username
@@ -58,7 +74,7 @@ class Server :
 
     async def connection_limiting(self, client) :
         ip = client.remote_address[0] 
-        if ip in self.connections_per_ip and self.connections_per_ip[ip] > 1 :
+        if ip in self.connections_per_ip and self.connections_per_ip[ip] > 2 :
                 await self.disconnect(client)
                 return True
         return False

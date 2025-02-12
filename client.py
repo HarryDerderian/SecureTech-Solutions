@@ -19,49 +19,33 @@ class Client:
         self.ssl_context.load_verify_locations(self.localhost_pem)
         self.ssl_context.check_hostname = False
         self.ssl_context.verify_mode = ssl.CERT_NONE
-        self.tmp = True
+        self.connected = True
 
     async def receive_messages(self, websocket):
         try:
             async for message in websocket:
                 self.gui.update_chatbox(message)
         finally:
-            pass
+            self.connected =False
+            print("disconnected")
 
     async def send_message(self, message):
-        print(f"Attempting to send message: {message}")
-
-        #if self.ws and self.ws.open:
         if self.ws :
-            print("sending msg")
-            print(self.ws)
-            print(f"ws = {self.ws.id}")
             await self.ws.send(message)
         else:
             print("error")
             self.gui.update_chatbox("[!] Not connected to server.")
     
     async def connect(self):
-        attempts = 3
-
-        while self.tmp: 
+        # The client should not reconnect if the server calls client.disconnect.......
+        print("connected called...")
+        while self.connected: 
             try:
                 async with websockets.connect(self.URI, ssl=self.ssl_context) as websocket:
                     self.ws = websocket
                     self.gui.update_chatbox("[+] Connected to server.")    
-                    await self.receive_messages(self.ws)
-                    # edge case catching goes here <------
-            except Exception as e: # resolve better exception handling
-                    print(e)
-                    self.gui.update_chatbox("[!] Connection failed. Retrying in 3s...")
-                    self.tmp = False
-                    #await asyncio.sleep(3)
-
-    
-    
-
-
-
+                    await self.receive_messages(self.ws)          
+            finally : pass
 
 class GUI:
         _BACKGROUND_COLOR = 'black'
@@ -72,20 +56,14 @@ class GUI:
         _HEIGHT_RESIZEABLE = False
         _WIDTH_RESIZEABLE = False
 
-
         def __init__(self) :
             self._build_root()
             self._build_main_window()
             self._chatbox()
             self._input_box()
             self._root.bind("<Return>", self.on_enter_pressed)
-
             self.client = Client(self)
             threading.Thread(target=self.run_asyncio_loop, daemon=True).start()
-
-
-
-
             self._root.mainloop()
 
         def _build_root(self) :
@@ -139,15 +117,12 @@ class GUI:
                 self.input_entry.delete(0, END)  # Clear input field
                 future = asyncio.run_coroutine_threadsafe(self.client.send_message(message), self.loop)
 
-
-
         def run_asyncio_loop(self):
             """Runs the asyncio event loop in a separate thread"""
             self.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.loop)
             self.loop.run_until_complete(self.client.connect())
 
-        
         def on_enter_pressed(self, event):
             """Handles the Enter key being pressed"""
             self._send_message()

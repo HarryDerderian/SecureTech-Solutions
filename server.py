@@ -25,7 +25,7 @@ def initialize_db() :
 class Server :
     def __init__(self) :
         self.connected_clients = {} 
-        self.connections = set()
+        self.connections_per_ip = {} # ip : total connections
         self.PORT = 7778 
         self.HOST = "localhost"
         self.db = sqlite3.connect("securechat.db")
@@ -34,9 +34,7 @@ class Server :
         self.ssl_context.load_cert_chain(self.localhost_pem)
 
 
-
-
-    # Asking the user if they want to login or register upon connection
+     # Asking the user if they want to login or register upon connection
     async def initial_connect_prompt(self, client) -> User:
         valid = False
         while(not valid) :
@@ -59,25 +57,23 @@ class Server :
         await server.wait_closed()
 
     async def connection_limiting(self, client) :
-        if len(self.connections) == 1 :  
-            return False
-        for cli in self.connections :
-            if cli.remote_address[0] == client.remote_address[0] :
-                print("Client already connected.")
-
-                await client.send("You are already connected to the server.")
+        ip = client.remote_address[0] 
+        if ip in self.connections_per_ip and self.connections_per_ip[ip] > 1 :
                 await self.disconnect(client)
                 return True
         return False
 
     async def handle_connection(self, client) :
         try:
-            self.connections.add(client)
-            if(await self.connection_limiting(client)) :
-                return
+            client_ip = client.remote_address[0]
+            if client_ip in self.connections_per_ip :
+                self.connections_per_ip[client_ip] += 1
+            else :
+                self.connections_per_ip[client_ip] = 1
+            if(await self.connection_limiting(client)) : return
+            
             user = await self.initial_connect_prompt(client) # return the user 
             if user is None : pass
-         #       await self.disconnect(client)
                 
             self.connected_clients[client] = user
             if(await self.connection_limiting(client)) :
@@ -86,10 +82,12 @@ class Server :
             await self.messaging(client)
         except ConnectionClosed:
             print("Client disconnected.")
+            self.connections_per_ip[client_ip] -= 1
         finally: # will always run at no matter the outcome or the error raised for the client
             if client in self.connected_clients.keys() :
                 await self.chat_broadcast(f"{self.connected_clients[client].username} has left the chat.", excluded_client=client)
-                del self.connected_clients[client] # very important we dont leave hanging clients, get em out of here
+                del self.connected_clients[client]# very important we dont leave hanging clients, get em out of here
+
             
     async def messaging(self, client) :
          async for message in client :
@@ -143,9 +141,12 @@ class Server :
         return user
     
     async def disconnect(self, client) :
+        client_ip = client.remote_address[0]
+        self.connections_per_ip[client_ip] -= 1
         await client.send("You have been disconnected by the server.")
         await client.close()
-        self.connections.remove(client)
+        if client in self.connected_clients :
+            del self.connected_clients[client]
 
 
 async def main() :

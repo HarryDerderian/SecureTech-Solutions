@@ -2,6 +2,7 @@ import asyncio
 import sqlite3
 import pathlib
 import ssl
+import bcrypt
 
 from websockets.asyncio.server import serve
 from websockets.asyncio.server import broadcast
@@ -124,15 +125,25 @@ class Server :
             username = await client.recv()
             await client.send("Enter your password: ")
             password = await client.recv()
-            cursor.execute("SELECT * FROM users WHERE user = ? AND pass = ?", (username, password))
-            if cursor.fetchone() is None :
+            userBytes = password.encode()
+
+            # dbUser = cursor.execute("SELECT * FROM users WHERE user = ?", (username)).fetchone()
+            dbUser = cursor.execute("SELECT * FROM users WHERE user = ?", (username,)).fetchone()
+
+            # print(dbUser)
+
+            if dbUser:
+                stored_hash = dbUser[1]  # dbUser[1] is the hashed password
+                if bcrypt.checkpw(userBytes, stored_hash):  # Compare entered password with hash
+                    print("User " + dbUser[0] + " authenticated")
+                    user = User(username, password)
+                    await client.send(f"Welcome back, {username}! 🔐\nYou are now securely connected to SecureChat. Enjoy your conversation!")
+                    cursor.close()
+                    return user
+            else:
                 await client.send("Invalid credentials. Please try again.")
                 attempts -= 1
-            else : 
-                user = User(username, password)
-                await client.send(f"Welcome back, {username}! 🔐\nYou are now securely connected to SecureChat. Enjoy your conversation!")
-                cursor.close()
-                return user
+
         cursor.close()
         return None
 
@@ -148,8 +159,12 @@ class Server :
         
         await client.send("Enter a password: ")
         password = await client.recv()
-        user = User(username, password)
-        cursor.execute("INSERT INTO users VALUES (?, ?)", (username, password))
+        hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+        print(password)
+        print(hashed_password)
+        user = User(username, hashed_password)
+        print(user.password)
+        cursor.execute("INSERT INTO users VALUES (?, ?)", (username, hashed_password))
         cursor.close()
         self.db.commit() # save the changes to the db
         await client.send(f"Welcome to SecureChat, {username}! 🎉\nYou have successfully registered. Enjoy secure and private conversations!")

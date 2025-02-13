@@ -44,7 +44,7 @@ class Server :
         self.HOST = "localhost"
         self.db = sqlite3.connect("securechat.db")
         self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        self.localhost_pem = pathlib.Path(__file__).with_name("localhost.pem")
+        self.localhost_pem = pathlib.Path(__file__).with_name("key.pem")
         self.ssl_context.load_cert_chain(self.localhost_pem)
 
 
@@ -54,7 +54,7 @@ class Server :
         while(not valid) :
             await client.send("Welcome to Secure Chat. Type 'L' to login or 'R' to register.")
             response = await client.recv()
-            print(response)
+            
             if response.upper() == "L" : 
                 user = await self.login(client)
                 valid = True
@@ -161,10 +161,8 @@ class Server :
         await client.send("Enter a password: ")
         password = await client.recv()
         hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-        print(password)
-        print(hashed_password)
         user = User(username, hashed_password)
-        print(user.password)
+
         cursor.execute("INSERT INTO users VALUES (?, ?)", (username, hashed_password))
         cursor.close()
         self.db.commit() # save the changes to the db

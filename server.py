@@ -4,6 +4,7 @@ import pathlib
 import ssl
 import bcrypt
 import time
+import os
 
 from websockets.asyncio.server import serve
 from websockets.asyncio.server import broadcast
@@ -39,13 +40,17 @@ class RateLimiter:
             return False
 
 
-def initialize_db() :
-    conn = sqlite3.connect("securechat.db")
-    cursor = conn.cursor()
-    cursor.execute("""CREATE TABLE users (
-                      user text,
-                      pass text
-                      )""")
+def initialize_db():
+    # Check if the database file already exists
+    if not os.path.exists("securechat.db"):
+        conn = sqlite3.connect("securechat.db")
+        cursor = conn.cursor()
+        cursor.execute("""CREATE TABLE users (
+                          user text,
+                          pass text
+                          )""")
+        conn.commit()  # Commit changes to the database
+        conn.close()   # Close the connection
     
 class Server :
     def __init__(self) :
@@ -154,19 +159,25 @@ class Server :
             username = await client.recv()
             await client.send("Enter your password: ")
             password = await client.recv()
-            cursor.execute("SELECT * FROM users WHERE user = ? AND pass = ?", (username, password))
-            if cursor.fetchone() is None :
+            userBytes = password.encode()
+            dbUser = cursor.execute("SELECT * FROM users WHERE user = ?", (username,)).fetchone()
+
+            if dbUser:
+                stored_hash = dbUser[1]  # dbUser[1] is the hashed password
+                if bcrypt.checkpw(userBytes, stored_hash):  # Compare entered password with hash
+                    print("User " + dbUser[0] + " authenticated")
+                    user = User(username, password)
+                    if not await self.sso(username) :
+                        await client.send(f"[!] You are already signed in.")
+                        return None
+                    else :
+                        await client.send(f"Welcome back, {username}! 🔐\nYou are now securely connected to SecureChat. Enjoy your conversation!")
+                        cursor.close()
+                        return user
+            else:
                 await client.send("Invalid credentials. Please try again.")
                 attempts -= 1
-            else : 
-                user = User(username, password)
-                if await self.sso(username) :
-                    await client.send(f"Welcome back, {username}! 🔐\nYou are now securely connected to SecureChat. Enjoy your conversation!")
-                    cursor.close()
-                    return user
-                else :
-                    await client.send(f"You're already signed in.")
-                    break
+
         cursor.close()
         return None
 
@@ -201,6 +212,7 @@ class Server :
 
 
 async def main() :
+    initialize_db()
     SecureChat = Server()
     await SecureChat.run()
 

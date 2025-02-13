@@ -11,7 +11,6 @@ from websockets import serve
 
 
 # TO-DO 
-# only allow one instances of a user at one time aka you can only log in once per session no double harry
 # some basic Rate Limiting
 
 # Finished
@@ -20,6 +19,7 @@ from websockets import serve
 # User Authentication
 # Detect and handle dropped connections gracefully (Join & Disconnect functionality)
 # Reconnect clients automatically in case of interruptions (e.g heartbeat functionality) 
+# only allow one instances of a user at one time aka you can only log in once per session no double harry
 
 
 class User :
@@ -54,7 +54,7 @@ class Server :
         while(not valid) :
             await client.send("Welcome to Secure Chat. Type 'L' to login or 'R' to register.")
             response = await client.recv()
-            
+
             if response.upper() == "L" : 
                 user = await self.login(client)
                 valid = True

@@ -127,10 +127,7 @@ class Server :
             password = await client.recv()
             userBytes = password.encode()
 
-            # dbUser = cursor.execute("SELECT * FROM users WHERE user = ?", (username)).fetchone()
             dbUser = cursor.execute("SELECT * FROM users WHERE user = ?", (username,)).fetchone()
-
-            # print(dbUser)
 
             if dbUser:
                 stored_hash = dbUser[1]  # dbUser[1] is the hashed password

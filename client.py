@@ -4,7 +4,7 @@ import ssl
 import threading
 import pathlib
 
-from tkinter import Tk, Frame, Label, Entry, Button, Text, END, Canvas
+from tkinter import Tk, Frame, Label, Entry, Button, Text, END, Canvas, PhotoImage
 from PIL import Image, ImageTk
 
 
@@ -100,6 +100,9 @@ class GUI:
             self._root.geometry(str(self._WIDTH) + "x" + str(self._HEIGHT))
             self._root.resizable(self._WIDTH_RESIZEABLE, self._HEIGHT_RESIZEABLE)
             self._root.configure(bg=self._BACKGROUND_COLOR)
+            
+            icon = PhotoImage(file="assets/oss.png")
+            self._root.iconphoto(True, icon)
         
         def _build_main_window(self):
             # Create main window frame

@@ -76,6 +76,13 @@ class Server :
                 return True
         return False
 
+
+    async def sso(self, username) :
+        for user in self.connected_clients.values() :
+            if username == user.username :
+                return False
+        return True
+
     async def handle_connection(self, client) :
         try:
             client_ip = client.remote_address[0]
@@ -130,9 +137,13 @@ class Server :
                 attempts -= 1
             else : 
                 user = User(username, password)
-                await client.send(f"Welcome back, {username}! 🔐\nYou are now securely connected to SecureChat. Enjoy your conversation!")
-                cursor.close()
-                return user
+                if await self.sso(username) :
+                    await client.send(f"Welcome back, {username}! 🔐\nYou are now securely connected to SecureChat. Enjoy your conversation!")
+                    cursor.close()
+                    return user
+                else :
+                    await client.send(f"You're already signed in.")
+                    break
         cursor.close()
         return None
 

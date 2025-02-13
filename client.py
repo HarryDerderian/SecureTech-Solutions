@@ -28,8 +28,8 @@ class Client:
         self.URI = "wss://localhost:7778"
         self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         self.gui = gui
-        self.localhost_pem = pathlib.Path(__file__).with_name("localhost.pem")
-        self.ssl_context.load_verify_locations(self.localhost_pem)
+        self.key_pem = pathlib.Path(__file__).with_name("key.pem")
+        self.ssl_context.load_verify_locations(self.key_pem)
         self.ssl_context.check_hostname = False
         self.ssl_context.verify_mode = ssl.CERT_NONE
         self.ws = None  

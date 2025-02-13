@@ -44,8 +44,8 @@ class Server :
         self.HOST = "localhost"
         self.db = sqlite3.connect("securechat.db")
         self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        self.localhost_pem = pathlib.Path(__file__).with_name("key.pem")
-        self.ssl_context.load_cert_chain(self.localhost_pem)
+        self.key_pem = pathlib.Path(__file__).with_name("key.pem")
+        self.ssl_context.load_cert_chain(self.key_pem)
 
 
      # Asking the user if they want to login or register upon connection

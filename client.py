@@ -23,15 +23,21 @@ class Client:
         self.server_dc = False
         self.reconnect_attempts = 0  
 
+
+
     async def receive_messages(self):
                 async for message in self.ws:
                     self.gui.update_chatbox(message)
                     if message == "You have been disconnected by the server.":
                             self.server_dc = True
                             break
-                    
+
+
+
     async def send_message(self, message):
             await self.ws.send(message)
+
+
 
     async def connect(self):
              while not self.server_dc:
@@ -58,6 +64,8 @@ class Client:
                         self.reconnect_attempts += 1
              self.gui.update_chatbox("[!] Server has disconnected you.")
     
+
+
     async def disconnect(self):
         if self.connected:  
             self.connected = False
@@ -82,6 +90,8 @@ class GUI:
         _WIDTH_RESIZEABLE = False
         _LOGO_PATH = 'assets/oss_transparent.png'
 
+
+
         def __init__(self) :
             self._build_root()
             self._build_main_window()
@@ -96,6 +106,8 @@ class GUI:
             threading.Thread(target=self.run_asyncio_loop, daemon=True).start()
             self._root.mainloop()
 
+
+
         def _build_root(self) :
             self._root = Tk()
             self._root.title(self._TITLE)
@@ -106,6 +118,8 @@ class GUI:
             icon = PhotoImage(file="assets/oss.png")
             self._root.iconphoto(True, icon)
         
+
+
         def _build_main_window(self):
             # Create main window frame
             self._main_window = Frame(self._root, 
@@ -125,6 +139,8 @@ class GUI:
                                     outline=neon_green, width=border_thickness)
 
         
+
+
         def _chatbox(self):
             """Creates a chat display box with a scrollbar"""
             self.chat_display = Text(
@@ -153,6 +169,8 @@ class GUI:
             self.chat_display.config(state="disabled")
             self.chat_display.see(END)
 
+
+
         def _input_box(self):
             """Creates an input box with a send button"""
             self.input_entry = Entry(self._main_window, font=("Arial", 14), bg="gray20", fg="white",  insertbackground="#00FF00")
@@ -165,6 +183,8 @@ class GUI:
             )
             self.send_button.place(x=850, y=600,  width=120, height=50)
 
+
+
         def _send_message(self):
             """Handles sending messages and updating the chat display"""
             message = self.input_entry.get().strip()
@@ -175,15 +195,21 @@ class GUI:
                     future = asyncio.run_coroutine_threadsafe(self.client.send_message(message), self.loop)
                 self.input_entry.delete(0, END)  # Clear input field
 
+
+
         def run_asyncio_loop(self):
             """Runs the asyncio event loop in a separate thread"""
             self.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.loop)
             self.loop.run_until_complete(self.client.connect())
 
+
+
         def on_enter_pressed(self, event):
             """Handles the Enter key being pressed"""
             self._send_message()
+
+
 
         def _add_logo(self):
             """Add the logo image to the window"""
@@ -195,6 +221,8 @@ class GUI:
             logo_label.image = logo
             logo_label.place(x=860, y=180)
 
+
+
         def _add_disconnect_button(self):
             """Add a disconnect button to the window"""
             self.disconnect_button = Button(
@@ -202,6 +230,8 @@ class GUI:
                 bg="red", fg="white", command=self._disconnect
             )
             self.disconnect_button.place(x=850, y=20, width=120, height=50)
+
+
 
         def _add_close_button(self):
             """Add a close button to the window"""
@@ -211,6 +241,8 @@ class GUI:
             )
             self.close_button.place(x=1060, y=20, width=120, height=50)
         
+
+
         def _add_clear_button(self) :
                        
             self.clear_button = Button(
@@ -218,7 +250,6 @@ class GUI:
                  bg="#00FF00", fg="black", command=  self.clear_chatbox
             )
             self.clear_button.place(x=1060, y=600, width=120, height=50)
-        
         
 
 
@@ -232,10 +263,14 @@ class GUI:
             else:
                 self._connect()
 
+
+
         def _quit(self):
             """Quits the application"""
             self._root.quit()
             self._root.destroy()
+
+
 
         def _connect(self):
             """Attempts to reconnect to the server."""

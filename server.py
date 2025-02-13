@@ -41,6 +41,7 @@ class RateLimiter:
             return False
 
 
+
 def initialize_db():
     # Check if the database file already exists
     if not os.path.exists("securechat.db"):
@@ -83,10 +84,14 @@ class Server :
                 await client.send("Invalid input. Please try again.")
         return user
 
+
+
     async def run(self):
         server = await serve(self.handle_connection, self.HOST, self.PORT, ssl = self.ssl_context)
         print(f"SecureTech Solutions: SecureChat\nServer listening on wss://{self.HOST}:{self.PORT}")
         await server.wait_closed()
+
+
 
     async def connection_limiting(self, client) :
         ip = client.remote_address[0] 
@@ -96,11 +101,14 @@ class Server :
         return False
 
 
+
     async def sso(self, username) :
         for user in self.connected_clients.values() :
             if username == user.username :
                 return False
         return True
+
+
 
     async def handle_connection(self, client) :
         try:
@@ -129,7 +137,8 @@ class Server :
                 await self.chat_broadcast(f"{self.connected_clients[client].username} has left the chat.", excluded_client=client)
                 del self.connected_clients[client]# very important we dont leave hanging clients, get em out of here
 
-            
+
+
     async def messaging(self, client) :
         rate_limiter = self.rate_limiter.get(client)
         if rate_limiter is None:
@@ -146,12 +155,18 @@ class Server :
             message = f"{username}: {message}"
             await self.chat_broadcast(message, client)
 
+
+
     async def welcome_msg(self, client) :
         await client.send("Welcome to Secure Chat.")
     
+
+
     async def chat_broadcast(self, message, excluded_client = None):
          broadcast(set(self.connected_clients.keys()).difference({excluded_client}), message)
     
+
+
     async def login(self, client) :
         attempts = 3
         cursor = self.db.cursor()
@@ -182,6 +197,8 @@ class Server :
         cursor.close()
         return None
 
+
+
     async def register(self, client) :
         cursor = self.db.cursor()
         while True :
@@ -209,6 +226,8 @@ class Server :
         await client.send(f"Welcome to SecureChat, {username}! 🎉\nYou have successfully registered. Enjoy secure and private conversations!")
         return user
 
+
+
     async def check_password(self, client, password):
         if len(password) < 15:
             await client.send("Password must be at least 15 characters long.")
@@ -232,6 +251,8 @@ class Server :
         # If all checks pass
         return True
     
+
+
     async def disconnect(self, client) :
         client_ip = client.remote_address[0]
         self.connections_per_ip[client_ip] -= 1

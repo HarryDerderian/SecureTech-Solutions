@@ -225,6 +225,9 @@ class Server :
         if not re.search("[!@#$%^&*]", password):
             await client.send("Password must contain at least one special character.")
             return False
+        if " " in password:
+            await client.send("Password cannot contain spaces.")
+            return False
         
         # If all checks pass
         return True

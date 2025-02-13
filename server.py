@@ -77,6 +77,13 @@ class Server :
                 return True
         return False
 
+
+    async def sso(self, username) :
+        for user in self.connected_clients.values() :
+            if username == user.username :
+                return False
+        return True
+
     async def handle_connection(self, client) :
         try:
             client_ip = client.remote_address[0]
@@ -125,25 +132,19 @@ class Server :
             username = await client.recv()
             await client.send("Enter your password: ")
             password = await client.recv()
-            userBytes = password.encode()
-
-            # dbUser = cursor.execute("SELECT * FROM users WHERE user = ?", (username)).fetchone()
-            dbUser = cursor.execute("SELECT * FROM users WHERE user = ?", (username,)).fetchone()
-
-            # print(dbUser)
-
-            if dbUser:
-                stored_hash = dbUser[1]  # dbUser[1] is the hashed password
-                if bcrypt.checkpw(userBytes, stored_hash):  # Compare entered password with hash
-                    print("User " + dbUser[0] + " authenticated")
-                    user = User(username, password)
+            cursor.execute("SELECT * FROM users WHERE user = ? AND pass = ?", (username, password))
+            if cursor.fetchone() is None :
+                await client.send("Invalid credentials. Please try again.")
+                attempts -= 1
+            else : 
+                user = User(username, password)
+                if await self.sso(username) :
                     await client.send(f"Welcome back, {username}! 🔐\nYou are now securely connected to SecureChat. Enjoy your conversation!")
                     cursor.close()
                     return user
-            else:
-                await client.send("Invalid credentials. Please try again.")
-                attempts -= 1
-
+                else :
+                    await client.send(f"You're already signed in.")
+                    break
         cursor.close()
         return None
 

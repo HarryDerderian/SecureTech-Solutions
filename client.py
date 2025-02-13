@@ -144,7 +144,7 @@ class GUI:
 
         def _input_box(self):
             """Creates an input box with a send button"""
-            self.input_entry = Entry(self._main_window, font=("Arial", 14), bg="gray20", fg="white")
+            self.input_entry = Entry(self._main_window, font=("Arial", 14), bg="gray20", fg="white",  insertbackground="#00FF00")
             self.input_entry.place(x=20, y=600, width=800, height=50)
 
             # Send Button

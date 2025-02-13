@@ -4,7 +4,8 @@ import ssl
 import threading
 import pathlib
 
-from tkinter import Tk, Frame, Label, Entry, Button, Text, END
+from tkinter import Tk, Frame, Label, Entry, Button, Text, END, Canvas
+from PIL import Image, ImageTk
 
 
 # TO-DO 
@@ -80,12 +81,14 @@ class GUI:
         _HEIGHT = 700
         _HEIGHT_RESIZEABLE = False
         _WIDTH_RESIZEABLE = False
+        _LOGO_PATH = 'assets/oss.png'
 
         def __init__(self) :
             self._build_root()
             self._build_main_window()
             self._chatbox()
             self._input_box()
+            self._add_logo()
             self._root.bind("<Return>", self.on_enter_pressed)
             self.client = Client(self)
             threading.Thread(target=self.run_asyncio_loop, daemon=True).start()
@@ -96,12 +99,26 @@ class GUI:
             self._root.title(self._TITLE)
             self._root.geometry(str(self._WIDTH) + "x" + str(self._HEIGHT))
             self._root.resizable(self._WIDTH_RESIZEABLE, self._HEIGHT_RESIZEABLE)
+            self._root.configure(bg=self._BACKGROUND_COLOR)
         
-        def _build_main_window(self) :
+        def _build_main_window(self):
+            # Create main window frame
             self._main_window = Frame(self._root, 
-                                bg = self._BACKGROUND_COLOR, 
-                                height = self._HEIGHT, width = self._WIDTH)
-            self._main_window.place(x = 0, y = 0)
+                                    bg=self._BACKGROUND_COLOR, 
+                                    height=self._HEIGHT, width=self._WIDTH)
+            self._main_window.place(x=0, y=0)
+
+            # Draw border on the frame by using the canvas
+            neon_green = "#00FF00"
+            border_thickness = 5
+            canvas = Canvas(self._main_window, width=self._WIDTH, height=self._HEIGHT, bd=0, highlightthickness=0, bg=self._BACKGROUND_COLOR)
+            canvas.place(x=0, y=0)
+
+            # Draw the border
+            canvas.create_rectangle(border_thickness, border_thickness, 
+                                    self._WIDTH - border_thickness, self._HEIGHT - border_thickness, 
+                                    outline=neon_green, width=border_thickness)
+
         
         def _chatbox(self):
             """Creates a chat display box with a scrollbar"""
@@ -113,7 +130,7 @@ class GUI:
                 state="disabled", 
                 wrap="word"
             )
-            self.chat_display.place(x=20, y=20, width=900, height=550)
+            self.chat_display.place(x=20, y=20, width=800, height=550)
 
         def update_chatbox(self, message):
             """Appends a message to the chat display"""
@@ -153,6 +170,16 @@ class GUI:
         def on_enter_pressed(self, event):
             """Handles the Enter key being pressed"""
             self._send_message()
+
+        def _add_logo(self):
+            """Add the logo image to the window"""
+            logo_image = Image.open(self._LOGO_PATH)
+            logo_image = logo_image.resize((300, 270), Image.Resampling.LANCZOS)
+            logo = ImageTk.PhotoImage(logo_image)
+
+            logo_label = Label(self._main_window, image=logo, bg=self._BACKGROUND_COLOR)
+            logo_label.image = logo
+            logo_label.place(x=860, y=180)
 
 async def main():
     gui = GUI()

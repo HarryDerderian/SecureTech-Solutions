@@ -89,6 +89,7 @@ class GUI:
             self._chatbox()
             self._input_box()
             self._add_logo()
+            self._add_disconnect_button()
             self._root.bind("<Return>", self.on_enter_pressed)
             self.client = Client(self)
             threading.Thread(target=self.run_asyncio_loop, daemon=True).start()
@@ -183,6 +184,19 @@ class GUI:
             logo_label = Label(self._main_window, image=logo, bg=self._BACKGROUND_COLOR)
             logo_label.image = logo
             logo_label.place(x=860, y=180)
+
+        def _add_disconnect_button(self):
+            """Add a disconnect button to the window"""
+            disconnect_button = Button(
+                self._main_window, text="Disconnect", font=("Lucida Console", 14), 
+                bg="red", fg="white", command=self._disconnect
+            )
+            disconnect_button.place(x=1000, y=600, width=120, height=50)
+
+        def _disconnect(self):
+            """Gracefully disconnects from the server"""
+            self._root.quit()
+            self._root.destroy()
 
 async def main():
     gui = GUI()

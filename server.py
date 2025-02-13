@@ -177,7 +177,7 @@ class Server :
             password = await client.recv()
             userBytes = password.encode()
             dbUser = cursor.execute("SELECT * FROM users WHERE user = ?", (username,)).fetchone()  
-            stored_hash = dbUser[1] 
+            if dbUser : stored_hash = dbUser[1] 
             
             if dbUser and bcrypt.checkpw(userBytes,  stored_hash) :
                 print("User " + dbUser[0] + " authenticated")

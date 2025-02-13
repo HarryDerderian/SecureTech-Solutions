@@ -9,21 +9,6 @@ from tkinter import Tk, Frame, Label, Entry, Button, Text, END, Canvas, PhotoIma
 from PIL import Image, ImageTk
 
 
-# TO-DO 
-# simple heartbeat aka pings according to google idk THIS MAY ALREADY BE DONE see last line of finished
-# combine pem file info into code aka hardcode it
-# only allow one instances of a user at one time aka you can only log in once per session no double harry
-# some basic Rate Limiting
-
-# Finished
-# Real-Time Messaging
-# Secure Connection
-# User Authentication
-# Detect and handle dropped connections gracefully (Join & Disconnect functionality)
-# Reconnect clients automatically in case of interruptions (e.g heartbeat functionality) 
-# NOTE google seems to think heartbeat isnt rejoining a user after a dc, hoping its wrong if thats the case ignore the todo for heartbeat
-
-
 class Client:
     def __init__(self, gui) :
         self.URI = "wss://localhost:7778"
@@ -104,6 +89,7 @@ class GUI:
             self._input_box()
             self._add_logo()
             self._add_disconnect_button()
+            self._add_close_button()
             self._root.bind("<Return>", self.on_enter_pressed)
             self.client = Client(self)
             threading.Thread(target=self.run_asyncio_loop, daemon=True).start()
@@ -207,6 +193,14 @@ class GUI:
             )
             self.disconnect_button.place(x=1000, y=600, width=120, height=50)
 
+        def _add_close_button(self):
+            """Add a close button to the window"""
+            self.close_button = Button(
+                self._main_window, text="Close", font=("Lucida Console", 14), 
+                bg="red", fg="white", command=self._quit
+            )
+            self.close_button.place(x=1060, y=20, width=120, height=50)
+
         def _disconnect(self):
             """Toggles connection: disconnect if connected, otherwise connect."""
             # Check button text to decide whether to disconnect or reconnect.
@@ -216,6 +210,11 @@ class GUI:
                 self.disconnect_button.config(text="Connect", bg="#00FF00", fg="black")
             else:
                 self._connect()
+
+        def _quit(self):
+            """Quits the application"""
+            self._root.quit()
+            self._root.destroy()
 
         def _connect(self):
             """Attempts to reconnect to the server."""

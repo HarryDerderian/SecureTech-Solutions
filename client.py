@@ -60,7 +60,6 @@ class Client:
                     # start heartbeat or other tasks here.
                     # For now, we simply await receiving messages.
                     await self.receive_messages()
-                
                 except Exception as e:
                    pass
 
@@ -73,6 +72,20 @@ class Client:
                         await asyncio.sleep(wait_time)
                         self.reconnect_attempts += 1
              self.gui.update_chatbox("[!] Server has disconnected you.")
+    
+    async def disconnect(self):
+        if self.connected:  
+            self.connected = False
+            self.server_dc = True  
+            self.gui.update_chatbox("[!] Disconnecting from server...")
+            try:
+                await self.ws.close() 
+                self.gui.update_chatbox("[!] Disconnected from server.")
+            except Exception as e:
+                self.gui.update_chatbox(f"[!] Error during disconnection: {e}")
+
+
+        
 
 class GUI:
         _BACKGROUND_COLOR = 'black'
@@ -152,7 +165,7 @@ class GUI:
             # Send Button
             self.send_button = Button(
                 self._main_window, text="Send", font=("Lucida Console", 14), 
-                bg="green", fg="white", command=self._send_message
+                bg="#00FF00", fg="black", command=self._send_message
             )
             self.send_button.place(x=850, y=600, width=100, height=50)
 
@@ -188,16 +201,41 @@ class GUI:
 
         def _add_disconnect_button(self):
             """Add a disconnect button to the window"""
-            disconnect_button = Button(
+            self.disconnect_button = Button(
                 self._main_window, text="Disconnect", font=("Lucida Console", 14), 
                 bg="red", fg="white", command=self._disconnect
             )
-            disconnect_button.place(x=1000, y=600, width=120, height=50)
+            self.disconnect_button.place(x=1000, y=600, width=120, height=50)
 
         def _disconnect(self):
-            """Gracefully disconnects from the server"""
-            self._root.quit()
-            self._root.destroy()
+            """Toggles connection: disconnect if connected, otherwise connect."""
+            # Check button text to decide whether to disconnect or reconnect.
+            if self.disconnect_button.cget("text") == "Disconnect":
+                # Run the disconnect coroutine in the event loop
+                asyncio.run_coroutine_threadsafe(self.client.disconnect(), self.loop)
+                self.disconnect_button.config(text="Connect", bg="#00FF00", fg="black")
+            else:
+                self._connect()
+
+        def _connect(self):
+            """Attempts to reconnect to the server."""
+            # Only try to connect if not already connected.
+            if self.client.connected and not self.client.server_dc:
+                self.update_chatbox("[!] Already connected to the server.")
+                return
+
+            # Reset connection flags so that the client's connect loop will run.
+            self.client.server_dc = False
+            self.client.connected = False
+
+            self.update_chatbox("[+] Attempting to connect...")
+            # Update the button to reflect that we're now trying to connect.
+            self.disconnect_button.config(text="Disconnect", bg="red", fg="white")
+            # Start a new asyncio loop in a separate thread for the connection.
+            threading.Thread(target=self.run_asyncio_loop, daemon=True).start()
+        
+        
+
 
 async def main():
     gui = GUI()

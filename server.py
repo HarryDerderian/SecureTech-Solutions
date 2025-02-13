@@ -3,6 +3,7 @@ import sqlite3
 import pathlib
 import ssl
 import bcrypt
+import time
 
 from websockets.asyncio.server import serve
 from websockets.asyncio.server import broadcast
@@ -10,22 +11,32 @@ from websockets.exceptions import ConnectionClosed
 from websockets import serve
 
 
-# TO-DO 
-# some basic Rate Limiting
-
-# Finished
-# Real-Time Messaging
-# Secure Connection
-# User Authentication
-# Detect and handle dropped connections gracefully (Join & Disconnect functionality)
-# Reconnect clients automatically in case of interruptions (e.g heartbeat functionality) 
-# only allow one instances of a user at one time aka you can only log in once per session no double harry
-
-
 class User :
     def __init__(self, username, password) :
         self.username = username
         self.password = password
+
+
+class RateLimiter:
+    def __init__(self, max_messages, time_period):
+        self.max_messages = max_messages
+        self.time_period = time_period
+        self.message_timestamps = []
+
+    def can_send_message(self):
+        current_time = time.time()
+
+        # Remove timestamps that are older than the time period
+        self.message_timestamps = [
+            timestamp for timestamp in self.message_timestamps if current_time - timestamp <= self.time_period
+        ] 
+
+        # Check if the user has exceeded the message limit in the time period
+        if len(self.message_timestamps) < self.max_messages:
+            self.message_timestamps.append(current_time)
+            return True
+        else:
+            return False
 
 
 def initialize_db() :
@@ -46,6 +57,7 @@ class Server :
         self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         self.key_pem = pathlib.Path(__file__).with_name("key.pem")
         self.ssl_context.load_cert_chain(self.key_pem)
+        self.rate_limiter = {}
 
 
      # Asking the user if they want to login or register upon connection
@@ -113,7 +125,17 @@ class Server :
 
             
     async def messaging(self, client) :
-         async for message in client :
+        rate_limiter = self.rate_limiter.get(client)
+        if rate_limiter is None:
+            self.rate_limiter[client] = RateLimiter(max_messages=1, time_period=1) # 5 messages per second
+            rate_limiter = self.rate_limiter[client]
+
+        async for message in client :
+            # Check if the user has exceeded the message limit
+            if not rate_limiter.can_send_message():
+                await client.send("You are sending messages too quickly. Please wait before sending another message.")
+                continue
+
             username = self.connected_clients[client].username
             message = f"{username}: {message}"
             await self.chat_broadcast(message, client)

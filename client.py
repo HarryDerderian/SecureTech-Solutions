@@ -140,13 +140,9 @@ class GUI:
         
         def clear_chatbox(self):
             if hasattr(self, 'chat_display') and self.chat_display.winfo_exists():
-                print("Chat display exists. Clearing...")
                 self.chat_display.config(state="normal")  # Enable editing
                 self.chat_display.delete("1.0", "end")    # Delete all text
                 self.chat_display.config(state="disabled")  # Re-disable editing
-                print("done")
-            else:
-                print("Error: Chat display does not exist or is not initialized.")
 
 
 

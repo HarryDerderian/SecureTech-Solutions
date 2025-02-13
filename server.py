@@ -96,7 +96,7 @@ class Server :
     async def connection_limiting(self, client) :
         ip = client.remote_address[0] 
         if ip in self.connections_per_ip and self.connections_per_ip[ip] > 2 :
-                await self.disconnect(client)
+                await self.disconnect(client, ip)
                 return True
         return False
 
@@ -121,7 +121,7 @@ class Server :
             
             user = await self.initial_connect_prompt(client) # return the user 
             if user is None : 
-                await self.disconnect(client)
+                await self.disconnect(client, client_ip)
                 return
                 
             self.connected_clients[client] = user
@@ -199,31 +199,35 @@ class Server :
 
 
     async def register(self, client) :
-        cursor = self.db.cursor()
-        while True :
-            await client.send("Enter a username: ")
-            username = await client.recv()
-            cursor.execute("SELECT * FROM users WHERE user = ?", (username,))
-            # Check that the username is not already taken.
-            if cursor.fetchone() is None : break 
-            else : await client.send("username already taken.")
-        
-        while True :
-            await client.send("Enter a password: ")
-            password = await client.recv()
+           try :
+                cursor = self.db.cursor()
+                while True :
+                    await client.send("Enter a username: ")
+                    username = await client.recv()
+                    cursor.execute("SELECT * FROM users WHERE user = ?", (username,))
+                    # Check that the username is not already taken.
+                    if cursor.fetchone() is None : break 
+                    else : await client.send("username already taken.")
+                
+                while True :
+                    await client.send("Enter a password: ")
+                    password = await client.recv()
 
-            # Check if the password meets the requirements
-            if await self.check_password(client, password):
-                break
+                    # Check if the password meets the requirements
+                    if await self.check_password(client, password):
+                        break
 
-        hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-        user = User(username, hashed_password)
+                hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+                user = User(username, hashed_password)
 
-        cursor.execute("INSERT INTO users VALUES (?, ?)", (username, hashed_password))
-        cursor.close()
-        self.db.commit() # save the changes to the db
-        await client.send(f"Welcome to SecureChat, {username}! 🎉\nYou have successfully registered. Enjoy secure and private conversations!")
-        return user
+                cursor.execute("INSERT INTO users VALUES (?, ?)", (username, hashed_password))
+                cursor.close()
+                self.db.commit() # save the changes to the db
+                await client.send(f"Welcome to SecureChat, {username}! 🎉\nYou have successfully registered. Enjoy secure and private conversations!")
+                return user
+           finally : # check for dcs or any errors during regs, that way it handles logic correctly
+               if cursor : cursor.close()
+               return None
 
 
 
@@ -252,8 +256,7 @@ class Server :
     
 
 
-    async def disconnect(self, client) :
-        client_ip = client.remote_address[0]
+    async def disconnect(self, client, client_ip) :
         self.connections_per_ip[client_ip] -= 1
         await client.send("You have been disconnected by the server.")
         await client.close()

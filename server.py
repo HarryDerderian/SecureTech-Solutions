@@ -157,10 +157,8 @@ class Server :
         await client.send("Enter a password: ")
         password = await client.recv()
         hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-        print(password)
-        print(hashed_password)
         user = User(username, hashed_password)
-        print(user.password)
+
         cursor.execute("INSERT INTO users VALUES (?, ?)", (username, hashed_password))
         cursor.close()
         self.db.commit() # save the changes to the db

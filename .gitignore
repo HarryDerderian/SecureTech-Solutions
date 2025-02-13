@@ -1,5 +1,5 @@
 # I'm sick of this freaking db being passed
-*.db
+securechat.db
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -132,7 +132,7 @@ class Server :
             
     async def messaging(self, client) :
         rate_limiter = self.rate_limiter.get(client)
-        if rate_limiter is None:
+        if rate_limiter is None :
             self.rate_limiter[client] = RateLimiter(max_messages=1, time_period=1) # 5 messages per second
             rate_limiter = self.rate_limiter[client]
 
@@ -161,20 +161,19 @@ class Server :
             await client.send("Enter your password: ")
             password = await client.recv()
             userBytes = password.encode()
-            dbUser = cursor.execute("SELECT * FROM users WHERE user = ?", (username,)).fetchone()
-
-            if dbUser:
-                stored_hash = dbUser[1]  # dbUser[1] is the hashed password
-                if bcrypt.checkpw(userBytes, stored_hash):  # Compare entered password with hash
-                    print("User " + dbUser[0] + " authenticated")
-                    user = User(username, password)
-                    if not await self.sso(username) :
-                        await client.send(f"[!] You are already signed in.")
-                        return None
-                    else :
-                        await client.send(f"Welcome back, {username}! 🔐\nYou are now securely connected to SecureChat. Enjoy your conversation!")
-                        cursor.close()
-                        return user
+            dbUser = cursor.execute("SELECT * FROM users WHERE user = ?", (username,)).fetchone()  
+            stored_hash = dbUser[1] 
+            
+            if dbUser and bcrypt.checkpw(userBytes,  stored_hash) :
+                print("User " + dbUser[0] + " authenticated")
+                user = User(username, password)
+                if not await self.sso(username) :
+                    await client.send(f"[!] You are already signed in.")
+                    return None
+                else :
+                    await client.send(f"Welcome back, {username}! 🔐\nYou are now securely connected to SecureChat. Enjoy your conversation!")
+                    cursor.close()
+                    return user
             else:
                 await client.send("Invalid credentials. Please try again.")
                 attempts -= 1

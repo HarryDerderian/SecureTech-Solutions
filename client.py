@@ -81,7 +81,7 @@ class GUI:
         _HEIGHT = 700
         _HEIGHT_RESIZEABLE = False
         _WIDTH_RESIZEABLE = False
-        _LOGO_PATH = 'assets/oss.png'
+        _LOGO_PATH = 'assets/oss_transparent.png'
 
         def __init__(self) :
             self._build_root()

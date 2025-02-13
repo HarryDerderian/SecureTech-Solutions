@@ -90,6 +90,7 @@ class GUI:
             self._add_logo()
             self._add_disconnect_button()
             self._add_close_button()
+            self._add_clear_button()
             self._root.bind("<Return>", self.on_enter_pressed)
             self.client = Client(self)
             threading.Thread(target=self.run_asyncio_loop, daemon=True).start()
@@ -135,6 +136,19 @@ class GUI:
                 wrap="word"
             )
             self.chat_display.place(x=20, y=20, width=800, height=550)
+        
+        
+        def clear_chatbox(self):
+            if hasattr(self, 'chat_display') and self.chat_display.winfo_exists():
+                print("Chat display exists. Clearing...")
+                self.chat_display.config(state="normal")  # Enable editing
+                self.chat_display.delete("1.0", "end")    # Delete all text
+                self.chat_display.config(state="disabled")  # Re-disable editing
+                print("done")
+            else:
+                print("Error: Chat display does not exist or is not initialized.")
+
+
 
         def update_chatbox(self, message):
             """Appends a message to the chat display"""
@@ -153,7 +167,7 @@ class GUI:
                 self._main_window, text="Send", font=("Lucida Console", 14), 
                 bg="#00FF00", fg="black", command=self._send_message
             )
-            self.send_button.place(x=850, y=600, width=100, height=50)
+            self.send_button.place(x=850, y=600,  width=120, height=50)
 
         def _send_message(self):
             """Handles sending messages and updating the chat display"""
@@ -191,7 +205,7 @@ class GUI:
                 self._main_window, text="Disconnect", font=("Lucida Console", 14), 
                 bg="red", fg="white", command=self._disconnect
             )
-            self.disconnect_button.place(x=1000, y=600, width=120, height=50)
+            self.disconnect_button.place(x=850, y=20, width=120, height=50)
 
         def _add_close_button(self):
             """Add a close button to the window"""
@@ -200,6 +214,17 @@ class GUI:
                 bg="red", fg="white", command=self._quit
             )
             self.close_button.place(x=1060, y=20, width=120, height=50)
+        
+        def _add_clear_button(self) :
+                       
+            self.clear_button = Button(
+                self._main_window, text="Clear", font=("Lucida Console", 14), 
+                 bg="#00FF00", fg="black", command=  self.clear_chatbox
+            )
+            self.clear_button.place(x=1060, y=600, width=120, height=50)
+        
+        
+
 
         def _disconnect(self):
             """Toggles connection: disconnect if connected, otherwise connect."""

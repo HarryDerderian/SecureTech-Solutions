@@ -5,6 +5,7 @@ import ssl
 import bcrypt
 import time
 import os
+import re
 
 from websockets.asyncio.server import serve
 from websockets.asyncio.server import broadcast
@@ -191,8 +192,14 @@ class Server :
             if cursor.fetchone() is None : break 
             else : await client.send("username already taken.")
         
-        await client.send("Enter a password: ")
-        password = await client.recv()
+        while True :
+            await client.send("Enter a password: ")
+            password = await client.recv()
+
+            # Check if the password meets the requirements
+            if await self.check_password(client, password):
+                break
+
         hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
         user = User(username, hashed_password)
 
@@ -201,6 +208,26 @@ class Server :
         self.db.commit() # save the changes to the db
         await client.send(f"Welcome to SecureChat, {username}! 🎉\nYou have successfully registered. Enjoy secure and private conversations!")
         return user
+
+    async def check_password(self, client, password):
+        if len(password) < 15:
+            await client.send("Password must be at least 15 characters long.")
+            return False
+        if not re.search("[A-Z]", password):
+            await client.send("Password must contain at least one uppercase letter.")
+            return False
+        if not re.search("[a-z]", password):
+            await client.send("Password must contain at least one lowercase letter.")
+            return False
+        if not re.search("[0-9]", password):
+            await client.send("Password must contain at least one digit.")
+            return False    
+        if not re.search("[!@#$%^&*]", password):
+            await client.send("Password must contain at least one special character.")
+            return False
+        
+        # If all checks pass
+        return True
     
     async def disconnect(self, client) :
         client_ip = client.remote_address[0]

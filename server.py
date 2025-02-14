@@ -79,11 +79,9 @@ class Server :
                 valid = True
             elif response.upper() == "R" : 
                 user = await self.register(client)
-                print(user)
                 valid = True
             else : 
                 await client.send("Invalid input. Please try again.")
-        print(user)
         return user
 
 
@@ -122,7 +120,6 @@ class Server :
             if(await self.connection_limiting(client)) : return
             
             user = await self.initial_connect_prompt(client) # return the user 
-            print(user)
             if user is None : 
                 await self.disconnect(client, client_ip)
                 return
@@ -132,8 +129,9 @@ class Server :
             await self.messaging(client)
         except ConnectionClosed:
             print("Client disconnected.")
-            self.connections_per_ip[client_ip] -= 1
+           
         finally: # will always run at no matter the outcome or the error raised for the client
+            if client_ip and self.connections_per_ip[client_ip] > 0 : self.connections_per_ip[client_ip] -= 1
             if client in self.connected_clients.keys() :
                 await self.chat_broadcast(f"{self.connected_clients[client].username} has left the chat.", excluded_client=client)
                 del self.connected_clients[client]# very important we dont leave hanging clients, get em out of here

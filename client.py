@@ -21,6 +21,7 @@ class Client:
         self.ws = None  
         self.connected = False
         self.server_dc = True # block reconnecting
+        self.connecting = False
         self.reconnect_attempts = 0  
 
 
@@ -48,7 +49,7 @@ class Client:
                     self.connected = True
                     self.reconnect_attempts = 0  # Reset after a successful connection
                     self.gui.update_chatbox("[+] Connected to server.")
-
+                    self.connecting = False
                     # start heartbeat or other tasks here.
                     # For now, we simply await receiving messages.
                     await self.receive_messages()
@@ -57,9 +58,10 @@ class Client:
 
                 finally: # attempt to reconnect as long as the server did not dc us aka we lost connection on our own
                     if not self.server_dc :
+                        self.connecting = True
                         self.connected = False
                         # Wait before reconnecting using exponential backoff
-                        wait_time = min(2 ** self.reconnect_attempts, 60)
+                        wait_time = min(2 ** self.reconnect_attempts, 5)
                         self.gui.update_chatbox(f"[+] Disconnected. Retrying in {wait_time} seconds...")
                         await asyncio.sleep(wait_time)
                         self.reconnect_attempts += 1
@@ -256,9 +258,14 @@ class GUI:
 
 
         def _disconnect(self):
-            if self.disconnect_button.cget("text") == "Disconnect":
-                asyncio.run_coroutine_threadsafe(self.client.disconnect(), self.loop)
-                self.disconnect_button.config(text="Connect", bg="#00FF00", fg="black")
+            if self.disconnect_button.cget("text") == "Disconnect" or  self.disconnect_button.cget("text") == "Connecting":
+            
+                if self.client.connected :
+                    asyncio.run_coroutine_threadsafe(self.client.disconnect(), self.loop)
+                    self.disconnect_button.config(text="Connect", bg="#00FF00", fg="black")
+                else :
+                    self.update_chatbox("[!] Not connected. ")
+                    self.disconnect_button.config(text="Connecting", bg="#00FF00", fg="black")
             else :
                  self._connect()
 
@@ -279,8 +286,9 @@ class GUI:
             self.client.server_dc = False
             self.client.connected = False
             # Update the button to reflect that we're now trying to connect.
-            self.disconnect_button.config(text="Disconnect", bg="red", fg="white")
+           
             # Start a new asyncio loop in a separate thread for the connection.
+            self.disconnect_button.config(text="Disconnect", bg="red", fg="white")
             threading.Thread(target=self.run_asyncio_loop, daemon=True).start()
         
         

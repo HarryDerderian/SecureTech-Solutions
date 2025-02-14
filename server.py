@@ -79,9 +79,11 @@ class Server :
                 valid = True
             elif response.upper() == "R" : 
                 user = await self.register(client)
+                print(user)
                 valid = True
             else : 
                 await client.send("Invalid input. Please try again.")
+        print(user)
         return user
 
 
@@ -120,13 +122,12 @@ class Server :
             if(await self.connection_limiting(client)) : return
             
             user = await self.initial_connect_prompt(client) # return the user 
+            print(user)
             if user is None : 
                 await self.disconnect(client, client_ip)
                 return
                 
             self.connected_clients[client] = user
-            if(await self.connection_limiting(client)) :
-                return
             await self.chat_broadcast(f"{self.connected_clients[client].username} has joined the chat.", excluded_client=client)
             await self.messaging(client)
         except ConnectionClosed:
@@ -225,9 +226,12 @@ class Server :
                 self.db.commit() # save the changes to the db
                 await client.send(f"Welcome to SecureChat, {username}! 🎉\nYou have successfully registered. Enjoy secure and private conversations!")
                 return user
-           finally : # check for dcs or any errors during regs, that way it handles logic correctly
-               if cursor : cursor.close()
-               return None
+           except Exception as e:
+                    print(f"Error during registration: {e}")  # Log the error
+                    return None  # Return None if an error occurs
+           finally:
+                    if cursor:
+                        cursor.close()  # Ensure the cursor is always closed
 
 
 

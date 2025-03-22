@@ -202,6 +202,11 @@ class ChatPage(BasePage):
         )
         self.chat_display.place(x=20, y=20, width=800, height=550)
 
+        # Tags for Italic and Bold
+        self.chat_display.tag_configure("italic", font=("Lucida Console", 14, "italic"))
+        self.chat_display.tag_configure("bold", font=("Lucida Console", 14, "bold"))
+        self.chat_display.tag_configure("underline", font=("Lucida Console", 14, "underline"))
+
     def clear_chatbox(self):
         if hasattr(self, 'chat_display') and self.chat_display.winfo_exists():
             self.chat_display.config(state="normal")
@@ -210,13 +215,39 @@ class ChatPage(BasePage):
 
     def update_chatbox(self, message):
         self.chat_display.config(state="normal")
-        self.chat_display.insert("end", message + "\n")
+
+        # Parse message for special formatting
+        parts = message.split('*')
+        for i, part in enumerate(parts):
+            if i % 2 == 1:
+                if i % 2 == 1:
+                    if i > 0 and parts [i - 1].endswith('*') and i < len(parts) - 1 and parts[i + 1].startswith('*'):
+                        self.chat_display.insert("end", part, "bold")
+                    else:
+                        self.chat_display.insert("end", part, "italic")
+            else:
+                # Check for underlined text
+                sub_parts = part.split('__')
+                for j, sub_part in enumerate(sub_parts):
+                    if j % 2 == 1:
+                        self.chat_display.insert("end", sub_part, "underline")
+                    else:
+                        self.chat_display.insert("end", sub_part)
+            #     if parts[i-1].endswith('*') and parts[i+1].startswith('*'):
+            #         self.chat_display.insert("end", part, "bold")
+            #     else:
+            #         self.chat_display.insert("end", part, "italic")
+            # else:
+                
+
+        # self.chat_display.insert("end", message + "\n")
+        self.chat_display.insert("end", "\n")
         self.chat_display.config(state="disabled")
         self.chat_display.see("end")
 
     def _input_box(self):
         self.input_entry = Entry(
-            self._main_window, font=("Arial", 14), bg="gray20", fg="white", insertbackground="#00FF00"
+            self._main_window, font=("Arial", 14), bg="gray20", fg="white", insertbackground="#00FF00" 
         )
         self.input_entry.place(x=20, y=600, width=800, height=50)
 

@@ -4,6 +4,7 @@ import ssl
 import threading
 import pathlib
 import json
+import webbrowser
 
 
 from tkinter import Tk, Frame, Label, Entry, Button, Text, END, Canvas, PhotoImage, DISABLED, NORMAL, RIGHT, LEFT, BOTH, WORD, X
@@ -206,6 +207,18 @@ class ChatPage(BasePage):
         self.chat_display.tag_configure("italic", font=("Lucida Console", 14, "italic"))
         self.chat_display.tag_configure("bold", font=("Lucida Console", 14, "bold"))
         self.chat_display.tag_configure("underline", font=("Lucida Console", 14, "underline"))
+        self.chat_display.tag_configure("link", foreground="blue", underline=True)
+
+        self.chat_display.tag_bind("link", "<Button-1>", self.open_link)
+
+
+    def open_link(self, event):
+        index = self.chat_display.index(f"@{event.x},{event.y}")
+        tags = self.chat_display.tag_names(index)
+        if "link" in tags:
+            start, end = self.chat_display.tag_prevrange("link", index)
+            url = self.chat_display.get(start, end)
+            webbrowser.open(url) # Open the URL in default web browser
 
     def clear_chatbox(self):
         if hasattr(self, 'chat_display') and self.chat_display.winfo_exists():
@@ -226,18 +239,18 @@ class ChatPage(BasePage):
                     else:
                         self.chat_display.insert("end", part, "italic")
             else:
-                # Check for underlined text
+                # Check for underlined text and links
                 sub_parts = part.split('__')
                 for j, sub_part in enumerate(sub_parts):
                     if j % 2 == 1:
                         self.chat_display.insert("end", sub_part, "underline")
                     else:
-                        self.chat_display.insert("end", sub_part)
-            #     if parts[i-1].endswith('*') and parts[i+1].startswith('*'):
-            #         self.chat_display.insert("end", part, "bold")
-            #     else:
-            #         self.chat_display.insert("end", part, "italic")
-            # else:
+                        words = sub_part.split(' ')
+                        for word in words:
+                            if word.startswith("http://") or word.startswith("https://"):
+                                self.chat_display.insert("end", word  + " ", "link")
+                            else:
+                                self.chat_display.insert("end", word + " ")
                 
 
         # self.chat_display.insert("end", message + "\n")

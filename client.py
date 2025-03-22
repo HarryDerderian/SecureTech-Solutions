@@ -3,6 +3,7 @@ import websockets
 import ssl
 import threading
 import pathlib
+import json
 
 
 from tkinter import Tk, Frame, Label, Entry, Button, Text, END, Canvas, PhotoImage
@@ -28,16 +29,32 @@ class Client:
 
     async def receive_messages(self):
                 async for message in self.ws:
-                    self.gui.update_chatbox(message)
-                    if message == "You have been disconnected by the server.":
-                            self.server_dc = True
-                            self.gui._disconnect()
-                            break
+                   try :
+                        print(message)
+                        msg_json = json.loads(message)
+                        print(msg_json)
+                        # Normal message 
+                        if msg_json.get("type") == "group" or msg_json.get("type") == "server":
+                                self.gui.update_chatbox(msg_json.get("content"))
+                        # dms
+                        elif msg_json.get("type") == "private":
+                                sender = msg_json.get("sender", "Unknown")
+                                content = msg_json.get("content")
+                                self.gui.update_chatbox(f"[Private from {sender}]: {content}")
+
+                            # Handle disconnect messages
+                        elif message == "You have been disconnected by the server.":
+                                self.server_dc = True
+                                self.gui._disconnect()
+                                break
+                   except Exception as e :
+                        print(str(e))  
+                        
 
 
 
-    async def send_message(self, message):
-            await self.ws.send(message)
+    async def send_message(self, msg_json):
+            await self.ws.send(json.dumps(msg_json))
 
 
 
@@ -54,7 +71,7 @@ class Client:
                     # For now, we simply await receiving messages.
                     await self.receive_messages()
                 except Exception as e:
-                   pass
+                   print(str(e))
 
                 finally: # attempt to reconnect as long as the server did not dc us aka we lost connection on our own
                     if not self.server_dc :
@@ -196,7 +213,11 @@ class GUI:
                 if not self.client.connected or self.client.server_dc: self.update_chatbox("[!] Not connected to server.")
                 else :
                     self.update_chatbox("You: " + message)
-                    future = asyncio.run_coroutine_threadsafe(self.client.send_message(message), self.loop)
+                    msg_json = {
+                                "type": "group",
+                                "content": message
+                            }
+                    future = asyncio.run_coroutine_threadsafe(self.client.send_message(msg_json), self.loop)
                 self.input_entry.delete(0, END)  # Clear input field
 
 

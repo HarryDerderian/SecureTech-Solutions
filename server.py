@@ -6,6 +6,8 @@ import bcrypt
 import time
 import os
 import re
+import json
+
 
 from websockets.asyncio.server import serve
 from websockets.asyncio.server import broadcast
@@ -71,9 +73,14 @@ class Server :
     async def initial_connect_prompt(self, client) -> User:
         valid = False
         while(not valid) :
-            await client.send("Welcome to Secure Chat. Type 'L' to login or 'R' to register.")
-            response = await client.recv()
-
+            msg_json = {
+                "type": "server",
+                "content": "Welcome to Secure Chat. Type 'L' to login or 'R' to register."
+            }
+            await client.send(json.dumps(msg_json))
+            message = await client.recv()
+            json_msg = json.loads(message)
+            response = json_msg.get("content")
             if response.upper() == "L" : 
                 user = await self.login(client)
                 valid = True
@@ -81,7 +88,11 @@ class Server :
                 user = await self.register(client)
                 valid = True
             else : 
-                await client.send("Invalid input. Please try again.")
+                msg_json = {
+                "type": "server",
+                "content": "Invalid input. Please try again."
+                }
+                await client.send(json.dumps(msg_json))
         return user
 
 
@@ -144,10 +155,16 @@ class Server :
             self.rate_limiter[client] = RateLimiter(max_messages=1, time_period=1) # 5 messages per second
             rate_limiter = self.rate_limiter[client]
 
-        async for message in client :
+        async for json_msg in client :
             # Check if the user has exceeded the message limit
+            msg_data = json.loads(json_msg)
+            message = msg_data.get("content")
             if not rate_limiter.can_send_message():
-                await client.send("You are sending messages too quickly. Please wait before sending another message.")
+                msg_json = {
+                            "type": "server",
+                            "content": "You are sending messages too quickly. Please wait before sending another message."
+                }
+                await client.send(json.dumps(msg_json))    
                 continue
 
             username = self.connected_clients[client].username
@@ -157,12 +174,20 @@ class Server :
 
 
     async def welcome_msg(self, client) :
-        await client.send("Welcome to Secure Chat.")
+        msg_json = {
+                "type": "server",
+                "content": "Welcome to Secure Chat."
+             }
+        await client.send(json.dumps(msg_json))    
     
 
 
     async def chat_broadcast(self, message, excluded_client = None):
-         broadcast(set(self.connected_clients.keys()).difference({excluded_client}), message)
+         msg_json = {
+                "type": "server",
+                "content": message
+         }
+         broadcast(set(self.connected_clients.keys()).difference({excluded_client}), json.dumps(msg_json))
     
 
 
@@ -170,10 +195,20 @@ class Server :
         attempts = 3
         cursor = self.db.cursor()
         while attempts > 0 :
-            await client.send("Enter your username: ")
-            username = await client.recv()
-            await client.send("Enter your password: ")
-            password = await client.recv()
+            msg_json = {
+                "type": "server",
+                "content": "Enter your username: "
+             }
+            await client.send(json.dumps(msg_json))  
+            message = await client.recv()
+            json_msg = json.loads(message)
+            username = json_msg.get("content")
+            msg_json["content"] = "Enter your password: "
+            await client.send(json.dumps(msg_json))  
+            
+            message = await client.recv()
+            json_msg = json.loads(message)
+            password = json_msg.get("content")
             userBytes = password.encode()
             dbUser = cursor.execute("SELECT * FROM users WHERE user = ?", (username,)).fetchone()  
             if dbUser : stored_hash = dbUser[1] 
@@ -182,14 +217,17 @@ class Server :
                 print("User " + dbUser[0] + " authenticated")
                 user = User(username, password)
                 if not await self.sso(username) :
-                    await client.send(f"[!] You are already signed in.")
+                    msg_json["content"] = f"[!] You are already signed in."
+                    await client.send(json.dumps(msg_json))  
                     return None
                 else :
-                    await client.send(f"Welcome back, {username}! 🔐\nYou are now securely connected to SecureChat. Enjoy your conversation!")
+                    msg_json["content"] = f"Welcome back, {username}! 🔐\nYou are now securely connected to SecureChat. Enjoy your conversation!"
+                    await client.send(json.dumps(msg_json))  
                     cursor.close()
                     return user
             else:
-                await client.send("Invalid credentials. Please try again.")
+                msg_json["content"] = "Invalid credentials. Please try again."
+                await client.send(json.dumps(msg_json))  
                 attempts -= 1
 
         cursor.close()
@@ -200,18 +238,31 @@ class Server :
     async def register(self, client) :
            try :
                 cursor = self.db.cursor()
+                msg_json = {
+                    "type": "server",
+                    "content": "Enter a username: "
+                     }
                 while True :
-                    await client.send("Enter a username: ")
-                    username = await client.recv()
+                    msg_json["content"] = "Enter a username: "
+                    await client.send(json.dumps(msg_json))  
+                    message = await client.recv()
+                    json_msg = json.loads(message)
+                    username = json_msg.get("content")
                     cursor.execute("SELECT * FROM users WHERE user = ?", (username,))
                     # Check that the username is not already taken.
-                    if cursor.fetchone() is None : break 
-                    else : await client.send("username already taken.")
+                    if cursor.fetchone() is None : 
+                        print("nothing found")
+                        break 
+                    else : 
+                        msg_json["content"] = "username already taken."
+                        await client.send(json.dumps(msg_json))  
                 
                 while True :
-                    await client.send("Enter a password: ")
-                    password = await client.recv()
-
+                    msg_json["content"] = "Enter a password: "
+                    await client.send(json.dumps(msg_json))  
+                    message = await client.recv()
+                    json_msg = json.loads(message)
+                    password = json_msg.get("content")
                     # Check if the password meets the requirements
                     if await self.check_password(client, password):
                         break
@@ -222,7 +273,8 @@ class Server :
                 cursor.execute("INSERT INTO users VALUES (?, ?)", (username, hashed_password))
                 cursor.close()
                 self.db.commit() # save the changes to the db
-                await client.send(f"Welcome to SecureChat, {username}! 🎉\nYou have successfully registered. Enjoy secure and private conversations!")
+                msg_json["content"] = f"Welcome to SecureChat, {username}! 🎉\nYou have successfully registered. Enjoy secure and private conversations!"
+                await client.send(json.dumps(msg_json)) 
                 return user
            except Exception as e:
                     print(f"Error during registration: {e}")  # Log the error
@@ -235,22 +287,46 @@ class Server :
 
     async def check_password(self, client, password):
         if len(password) < 15:
-            await client.send("Password must be at least 15 characters long.")
+            msg_json = {
+                "type": "server",
+                "content": "Password must be at least 15 characters long."
+                }
+            await client.send(json.dumps(msg_json))
             return False
         if not re.search("[A-Z]", password):
-            await client.send("Password must contain at least one uppercase letter.")
+            msg_json = {
+                "type": "server",
+                "content": "Password must contain at least one uppercase letter."
+             }
+            await client.send(json.dumps(msg_json))
             return False
         if not re.search("[a-z]", password):
-            await client.send("Password must contain at least one lowercase letter.")
+            msg_json = {
+                "type": "server",
+                "content": "Password must contain at least one lowercase letter."
+             }
+            await client.send(json.dumps(msg_json))
             return False
         if not re.search("[0-9]", password):
-            await client.send("Password must contain at least one digit.")
+            msg_json = {
+                "type": "server",
+                "content": "Password must contain at least one digit."
+             }
+            await client.send(json.dumps(msg_json))
             return False    
         if not re.search("[!@#$%^&*]", password):
-            await client.send("Password must contain at least one special character.")
+            msg_json = {
+                "type": "server",
+                "content": "Password must contain at least one special character."
+             }
+            await client.send(json.dumps(msg_json))
             return False
         if " " in password:
-            await client.send("Password cannot contain spaces.")
+            msg_json = {
+                "type": "server",
+                "content": "Password cannot contain spaces."
+             }
+            await client.send(json.dumps(msg_json))            
             return False
         
         # If all checks pass
@@ -260,7 +336,11 @@ class Server :
 
     async def disconnect(self, client, client_ip) :
         self.connections_per_ip[client_ip] -= 1
-        await client.send("You have been disconnected by the server.")
+        msg_json = {
+                "type": "server",
+                "content": "You have been disconnected by the server."
+             }
+        await client.send(json.dumps(msg_json))    
         await client.close()
         if client in self.connected_clients :
             del self.connected_clients[client]

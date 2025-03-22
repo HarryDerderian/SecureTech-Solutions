@@ -5,6 +5,7 @@ import threading
 import pathlib
 import json
 import webbrowser
+import re
 
 
 from tkinter import Tk, Frame, Label, Entry, Button, Text, END, Canvas, PhotoImage, DISABLED, NORMAL, RIGHT, LEFT, BOTH, WORD, X
@@ -227,7 +228,6 @@ class ChatPage(BasePage):
             self.chat_display.config(state="disabled")
 
 
-
     def update_chatbox(self, message):
         self.chat_display.config(state="normal")
 
@@ -236,29 +236,34 @@ class ChatPage(BasePage):
 
         while i < length:
             # Handle bold (**)
-            if message[i:i+2] == '**':
+            if message[i:i+2] == '**':  # Check for bold markers
+                # Find the closing '**' for bold text
                 end = message.find('**', i + 2)
                 if end == -1:  # If no closing '**', treat the rest as normal text
-                    part = message[i+2:]
+                    part = message[i + 2:]
                     self.chat_display.insert("end", part)
                     break
                 else:
+                    # Insert bold part
                     self.chat_display.insert("end", message[i + 2:end], "bold")
                     i = end + 2  # Skip past the closing '**'
             
             # Handle italics (*)
-            elif message[i] == '*':
+            elif message[i] == '*':  # Check for italic markers
+                # Find the closing '*' for italic text
                 end = message.find('*', i + 1)
                 if end == -1:  # If no closing '*', treat the rest as normal text
                     part = message[i + 1:]
                     self.chat_display.insert("end", part)
                     break
                 else:
+                    # Insert italic part
                     self.chat_display.insert("end", message[i + 1:end], "italic")
                     i = end + 1  # Skip past the closing '*'
             
             # Handle underline (__)
-            elif message[i:i+2] == '__':
+            elif message[i:i+2] == '__':  # Check for underline markers
+                # Find the closing '__' for underline text
                 end = message.find('__', i + 2)
                 if end == -1:  # If no closing '__', treat the rest as normal text
                     part = message[i + 2:]
@@ -270,20 +275,85 @@ class ChatPage(BasePage):
                     i = end + 2  # Skip past the closing '__'
             
             # Handle links (http:// or https://)
-            elif message[i:i+4] == "http": 
-                end = message.find(' ', i)
-                if end == -1:
-                    end = length 
-                self.chat_display.insert("end", message[i:end], "link")
+            elif message[i:i+4] == "http":  # Check for links
+                # Use regex to capture the full URL (including those with punctuation and spaces)
+                url_match = re.match(r'(https?://[^\s]+)', message[i:])
+                if url_match:
+                    url = url_match.group(0)
+                    self.chat_display.insert("end", url, "link")
+                    i += len(url)  # Skip past the link
+                else:
+                    # If no valid link found, insert normal text
+                    self.chat_display.insert("end", message[i])
+                    i += 1
             
             else:
                 # Insert normal text (no formatting)
                 self.chat_display.insert("end", message[i])
-                i += 1
+                i += 1  # Move to the next character
 
         self.chat_display.insert("end", "\n")
         self.chat_display.config(state="disabled")
         self.chat_display.see("end")
+
+
+    # def update_chatbox(self, message):
+    #     self.chat_display.config(state="normal")
+
+    #     i = 0
+    #     length = len(message)
+
+    #     while i < length:
+    #         # Handle bold (**)
+    #         if message[i:i+2] == '**':
+    #             end = message.find('**', i + 2)
+    #             if end == -1:  # If no closing '**', treat the rest as normal text
+    #                 part = message[i+2:]
+    #                 self.chat_display.insert("end", part)
+    #                 break
+    #             else:
+    #                 self.chat_display.insert("end", message[i + 2:end], "bold")
+    #                 i = end + 2  # Skip past the closing '**'
+            
+    #         # Handle italics (*)
+    #         elif message[i] == '*':
+    #             end = message.find('*', i + 1)
+    #             if end == -1:  # If no closing '*', treat the rest as normal text
+    #                 part = message[i + 1:]
+    #                 self.chat_display.insert("end", part)
+    #                 break
+    #             else:
+    #                 self.chat_display.insert("end", message[i + 1:end], "italic")
+    #                 i = end + 1  # Skip past the closing '*'
+            
+    #         # Handle underline (__)
+    #         elif message[i:i+2] == '__':
+    #             end = message.find('__', i + 2)
+    #             if end == -1:  # If no closing '__', treat the rest as normal text
+    #                 part = message[i + 2:]
+    #                 self.chat_display.insert("end", part)
+    #                 break
+    #             else:
+    #                 # Insert underlined part
+    #                 self.chat_display.insert("end", message[i + 2:end], "underline")
+    #                 i = end + 2  # Skip past the closing '__'
+            
+    #         # Handle links (http:// or https://)
+    #         else:
+    #             words = message.split(' ')
+    #             for word in words:
+    #                 if word.startswith("http://") or word.startswith("https://"):
+    #                     self.chat_display.insert("end", word, "link")
+    #                 else:
+    #                     self.chat_display.insert("end", word)
+    #                 self.chat_display.insert("end", " ")
+    #             # Insert normal text (no formatting)
+    #             self.chat_display.insert("end", message[i])
+    #             i += 1
+
+    #     self.chat_display.insert("end", "\n")
+    #     self.chat_display.config(state="disabled")
+    #     self.chat_display.see("end")
 
     def _input_box(self):
         self.input_entry = Entry(

@@ -6,7 +6,7 @@ import pathlib
 import json
 
 
-from tkinter import Tk, Frame, Label, Entry, Button, Text, END, Canvas, PhotoImage, DISABLED, NORMAL, RIGHT, LEFT, BOTH, WORD, X
+from tkinter import Tk, Frame, Label, Entry, Button, Text, END, Canvas, PhotoImage, DISABLED, NORMAL, RIGHT, LEFT, BOTH, WORD, X, Listbox
 
 
 from PIL import Image, ImageTk
@@ -29,6 +29,7 @@ class Client:
 
 
 
+
     async def receive_messages(self):
                 async for message in self.ws:
                    try :
@@ -37,12 +38,19 @@ class Client:
                         print(msg_json)
                         # Normal message 
                         if msg_json.get("type") == "group" or msg_json.get("type") == "server":
-                                self.gui.update_main_chat(msg_json.get("content"))
+                                self.gui.update_chat(msg_json.get("content"))
+                        
+                        # Handle "user_list" message type
+                        elif msg_json.get("type") == "user_list":
+                            self.gui.update_user_list(msg_json.get("content"))
+                        
+                        elif msg_json.get("type") == "load" :
+                            self.gui.load_current_page(msg_json.get("content"))
                         # dms
                         elif msg_json.get("type") == "private":
                                 sender = msg_json.get("sender", "Unknown")
                                 content = msg_json.get("content")
-                                self.gui.update_main_chat(f"[Private from {sender}]: {content}")
+                                self.gui.update_chat(f"[Private from {sender}]: {content}")
 
                             # Handle disconnect messages
                         elif message == "You have been disconnected by the server.":
@@ -55,6 +63,32 @@ class Client:
 
 
 
+    async def switch_chat_mode(self, mode, recipient=None):
+        """Switch the chat mode between group and private."""
+        # Clear the current chat
+        self.gui.clear_chatbox()
+
+        # Update the current chat mode and recipient
+        self.current_chat_mode = mode
+        self.current_dm_recipient = recipient
+
+        # Notify the server about the chat mode switch
+        msg_json = {"type": "switch_mode", "mode": mode, "recipient": recipient}
+        await self.send_message(msg_json)
+
+        # Request chat logs from the server if switching to DM
+        if mode == "private" and recipient:
+            await self.request_chat_logs(recipient)
+
+
+    async def request_chat_logs(self, recipient):
+        """Request chat logs for the specified recipient."""
+        msg_json = {"type": "request_chat_logs", "recipient": recipient}
+        await self.send_message(msg_json)
+
+
+
+
     async def send_message(self, msg_json):
             await self.ws.send(json.dumps(msg_json))
 
@@ -63,11 +97,11 @@ class Client:
     async def connect(self):
              while not self.server_dc:
                 try:
-                    self.gui.update_main_chat("[+] Attempting to connect...")
+                    self.gui.update_chat("[+] Attempting to connect...")
                     self.ws = await websockets.connect(self.URI, ssl=self.ssl_context)
                     self.connected = True
                     self.reconnect_attempts = 0  # Reset after a successful connection
-                    self.gui.update_main_chat("[+] Connected to server.")
+                    self.gui.update_chat("[+] Connected to server.")
                     self.connecting = False
                     self.gui.connection_successful()
 
@@ -85,10 +119,10 @@ class Client:
                         # Wait before reconnecting using exponential backoff
                         wait_time = min(2 ** self.reconnect_attempts, 5)
                         # move gui to main page
-                        self.gui.update_main_chat(f"[+] Disconnected. Retrying in {wait_time} seconds...")
+                        self.gui.update_chat(f"[+] Disconnected. Retrying in {wait_time} seconds...")
                         await asyncio.sleep(wait_time)
                         self.reconnect_attempts += 1
-             self.gui.update_main_chat("[!] Not connected to the server.")
+             self.gui.update_chat("[!] Not connected to the server.")
              print("test")
 
 
@@ -96,12 +130,12 @@ class Client:
         if self.connected:  
             self.connected = False
             self.server_dc = True  
-            self.gui.update_main_chat("[!] Disconnecting from server...")
+            self.gui.update_chat("[!] Disconnecting from server...")
             try:
                 await self.ws.close() 
-                self.gui.update_main_chat("[!] Disconnected from server.")
+                self.gui.update_chat("[!] Disconnected from server.")
             except Exception as e:
-                self.gui.update_main_chat(f"[!] Error during disconnection: {e}")
+                self.gui.update_chat(f"[!] Error during disconnection: {e}")
                
 
 
@@ -120,7 +154,7 @@ class Client:
 class BasePage(Frame):
     _BACKGROUND_COLOR = 'black'
     _TEXT_COLOR = 'white'
-    _WIDTH = 1200
+    _WIDTH = 1400
     _HEIGHT = 700
     _HEIGHT_RESIZEABLE = False
     _WIDTH_RESIZEABLE = False
@@ -160,21 +194,21 @@ class BasePage(Frame):
         logo = ImageTk.PhotoImage(logo_image)
         logo_label = Label(self._main_window, image=logo, bg=self._BACKGROUND_COLOR)
         logo_label.image = logo
-        logo_label.place(x=860, y=180)
+        logo_label.place(x=1060, y=180)
 
     def _add_disconnect_button(self):
         self.disconnect_button = Button(
             self._main_window, text="Connect", font=("Lucida Console", 14),
             bg="#00FF00", fg="black", command=self._main_app.toggle_connection
         )
-        self.disconnect_button.place(x=850, y=20, width=120, height=50)
+        self.disconnect_button.place(x=1050, y=20, width=120, height=50)
 
     def _add_close_button(self):
         self.close_button = Button(
             self._main_window, text="Close", font=("Lucida Console", 14),
             bg="red", fg="white", command=self._main_app.quit
         )
-        self.close_button.place(x=1060, y=20, width=120, height=50)
+        self.close_button.place(x=1260, y=20, width=120, height=50)
 
 
     def show(self):
@@ -194,13 +228,14 @@ class ChatPage(BasePage):
         self._input_box()
         self._add_clear_button()
         self._root.bind("<Return>", self.on_enter_pressed)
+        self._add_sidebar()
 
     def _chatbox(self):
         self.chat_display = Text(
             self._main_window, bg=self._BACKGROUND_COLOR, fg=self._TEXT_COLOR,
             font=("Lucida Console", 14), state="disabled", wrap="word"
         )
-        self.chat_display.place(x=20, y=20, width=800, height=550)
+        self.chat_display.place(x=220, y=20, width=800, height=550)
 
     def clear_chatbox(self):
         if hasattr(self, 'chat_display') and self.chat_display.winfo_exists():
@@ -218,13 +253,13 @@ class ChatPage(BasePage):
         self.input_entry = Entry(
             self._main_window, font=("Arial", 14), bg="gray20", fg="white", insertbackground="#00FF00"
         )
-        self.input_entry.place(x=20, y=600, width=800, height=50)
+        self.input_entry.place(x=220, y=600, width=800, height=50)
 
         self.send_button = Button(
             self._main_window, text="Send", font=("Lucida Console", 14),
             bg="#00FF00", fg="black", command=self._send_message
         )
-        self.send_button.place(x=850, y=600, width=120, height=50)
+        self.send_button.place(x=1050, y=600, width=120, height=50)
 
     def _send_message(self):
         message = self.input_entry.get().strip()
@@ -240,7 +275,32 @@ class ChatPage(BasePage):
             self._main_window, text="Clear", font=("Lucida Console", 14),
             bg="#00FF00", fg="black", command=self.clear_chatbox
         )
-        self.clear_button.place(x=1060, y=600, width=120, height=50)
+        self.clear_button.place(x=1260, y=600, width=120, height=50)
+
+
+
+    def _add_sidebar(self):
+            """Add a sidebar to display the list of all users."""
+            self.sidebar = Frame(self._main_window, bg="gray20", width=200)
+            self.sidebar.place(x=10, y=10, height=680)
+
+            self.user_listbox = Listbox(self.sidebar, bg="gray20", fg="white", font=("Lucida Console", 12))
+            self.user_listbox.place(x=0, y=0, width=200, height=680)
+
+            # Bind click event to handle user selection
+            self.user_listbox.bind("<<ListboxSelect>>", self.on_user_selected)
+
+    def on_user_selected(self, event):
+            """Handle user selection from the sidebar."""
+            selected_user = self.user_listbox.get(self.user_listbox.curselection())
+            if selected_user:
+                self._main_app.switch_to_dm(selected_user)
+
+    def update_user_list(self, user_list):
+        """Update the sidebar with the list of all users."""
+        self.user_listbox.delete(0, END)
+        for user in user_list:
+            self.user_listbox.insert(END, user)
 
 
 class LoginPage(BasePage):
@@ -248,6 +308,7 @@ class LoginPage(BasePage):
         super().__init__(root, main_app)
         self.is_login_mode = True  # Default to login mode
         self._add_login_interface()
+
 
     def _add_login_interface(self):
         # Username
@@ -295,6 +356,10 @@ class LoginPage(BasePage):
             self.confirm_password_entry.place(x=550, y=300, width=200)
 
 
+
+            self.user_listbox.insert(END, user)
+
+
 class GUI:
     def __init__(self):
         self.root = Tk()
@@ -304,7 +369,8 @@ class GUI:
         self.current_page = None  # Track the current page
         self.pages["login"] = LoginPage(self.root, self)
         self.pages["main"] = ChatPage(self.root, self)
-        self.switch_page("login")
+        self.switch_page("main")
+        self.current_dm_recipient = None
 
         self.root.mainloop()
 
@@ -313,6 +379,7 @@ class GUI:
             self.disconnect()
         else:
             self.connect()
+
 
     def connect(self):
         # Check if the button is already in the "Connecting" state
@@ -370,8 +437,9 @@ class GUI:
         self.root.quit()
         self.root.destroy()
 
-    def update_main_chat(self, message):
-        self.current_page.update_chatbox(message)
+    def update_chat(self, message):
+        if self.current_page == self.pages["main"] or self.current_page == self.pages["dm"]:
+                self.current_page.update_chatbox(message)
 
     def switch_page(self, page_name):
         """Switch to a different page."""
@@ -394,6 +462,35 @@ class GUI:
         """Update the button state and text after a successful connection."""
         self.current_page.disconnect_button.config(text="Disconnect", bg="#FF0000", fg="white", state="normal")
 
+
+
+    def load_current_page(self, messages):
+        """Load a batch of messages into the chat display."""
+        if self.current_page == self.pages["main"] or self.current_page == self.pages["dm"]:
+            for message in messages:
+                self.current_page.update_chatbox(message)
+
+    def update_user_list(self, user_list) :
+        self.current_page.update_user_list(user_list)
+
+
+    def switch_to_dm(self, recipient):
+        """Switch to a DM chat with the selected user."""
+        self.current_dm_recipient = recipient
+        self.current_page.update_chatbox(f"[+] Started DM with {recipient}.")
+        # Request previous DMs from the server
+        if self.loop is not None:
+            asyncio.run_coroutine_threadsafe(
+                self.client.switch_chat_mode("private", recipient), self.loop
+            )
+        else:
+            print("[!] Event loop is not running.")
+
+
+    def clear_chatbox(self):
+        """Clear the chat display."""
+        if self.current_page == self.pages["main"]:
+            self.current_page.clear_chatbox()
 
 
 async def main():

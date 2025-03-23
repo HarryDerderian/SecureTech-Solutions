@@ -43,18 +43,31 @@ class RateLimiter:
             return False
 
 
-
 def initialize_db():
     # Check if the database file already exists
     if not os.path.exists("securechat.db"):
         conn = sqlite3.connect("securechat.db")
         cursor = conn.cursor()
-        cursor.execute("""CREATE TABLE users (
-                          user text,
-                          pass text
+        
+        # Create the users table
+        cursor.execute("""CREATE TABLE IF NOT EXISTS users (
+                          user TEXT,
+                          pass TEXT
                           )""")
+        
+        # Create the messages table
+        cursor.execute("""CREATE TABLE IF NOT EXISTS messages (
+                          id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          username TEXT,
+                          message TEXT,
+                          chat_type TEXT, 
+                          recipient TEXT, 
+                          timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                          )""")
+        
         conn.commit()  # Commit changes to the database
         conn.close()   # Close the connection
+
     
 class Server :
     def __init__(self) :
@@ -120,56 +133,167 @@ class Server :
         return True
 
 
+    async def get_all_users(self):
+        """Fetch all users from the database."""
+        cursor = self.db.cursor()
+        cursor.execute("SELECT user FROM users")
+        users = [row[0] for row in cursor.fetchall()]
+        cursor.close()
+        return users
 
-    async def handle_connection(self, client) :
+
+    async def send_user_list(self):
+        """Send the list of all users to all clients."""
+        all_users = await self.get_all_users()
+        msg_json = {
+            "type": "user_list",
+            "content": all_users
+        }
+        await self.chat_broadcast(json.dumps(msg_json))
+
+
+    async def handle_connection(self, client):
         try:
             client_ip = client.remote_address[0]
-            if client_ip in self.connections_per_ip :
+            if client_ip in self.connections_per_ip:
                 self.connections_per_ip[client_ip] += 1
-            else :
+            else:
                 self.connections_per_ip[client_ip] = 1
-            if(await self.connection_limiting(client)) : return
-            
-            user = await self.initial_connect_prompt(client) # return the user 
-            if user is None : 
+            if await self.connection_limiting(client):
+                return
+
+            user = await self.initial_connect_prompt(client)  # return the user
+            if user is None:
                 await self.disconnect(client, client_ip)
                 return
-                
+
             self.connected_clients[client] = user
+            all_users = await self.get_all_users()
+            msg_json = {
+                "type": "user_list",
+                "content": all_users
+            }
+            await client.send(json.dumps(msg_json))
+            # Send previous group chat messages to the client
+            await self.send_previous_messages(client, "group")
+
             await self.chat_broadcast(f"{self.connected_clients[client].username} has joined the chat.", excluded_client=client)
             await self.messaging(client)
         except ConnectionClosed:
             print("Client disconnected.")
-           
-        finally: # will always run at no matter the outcome or the error raised for the client
-            if client_ip and self.connections_per_ip[client_ip] > 0 : self.connections_per_ip[client_ip] -= 1
-            if client in self.connected_clients.keys() :
+        finally:
+            if client_ip and self.connections_per_ip[client_ip] > 0:
+                self.connections_per_ip[client_ip] -= 1
+            if client in self.connected_clients.keys():
                 await self.chat_broadcast(f"{self.connected_clients[client].username} has left the chat.", excluded_client=client)
-                del self.connected_clients[client]# very important we dont leave hanging clients, get em out of here
+                del self.connected_clients[client]  # very important we don't leave hanging clients, get them out of here
 
 
 
-    async def messaging(self, client) :
-        rate_limiter = self.rate_limiter.get(client)
-        if rate_limiter is None :
-            self.rate_limiter[client] = RateLimiter(max_messages=1, time_period=1) # 5 messages per second
-            rate_limiter = self.rate_limiter[client]
 
-        async for json_msg in client :
-            # Check if the user has exceeded the message limit
-            msg_data = json.loads(json_msg)
-            message = msg_data.get("content")
-            if not rate_limiter.can_send_message():
-                msg_json = {
-                            "type": "server",
-                            "content": "You are sending messages too quickly. Please wait before sending another message."
-                }
-                await client.send(json.dumps(msg_json))    
-                continue
 
-            username = self.connected_clients[client].username
-            message = f"{username}: {message}"
-            await self.chat_broadcast(message, client)
+
+
+
+
+    async def send_previous_messages(self, client, chat_type, recipient=None):
+        """Send previous messages for the specified chat type."""
+        print("loading messages.......")
+        
+        cursor = self.db.cursor()
+        if chat_type == "group":
+            cursor.execute("SELECT username, message FROM messages WHERE chat_type = ? ORDER BY timestamp ASC", (chat_type,))
+        elif chat_type == "private":
+            print("inside send prev")
+            cursor.execute("SELECT username, message FROM messages WHERE chat_type = ? AND (username = ? OR recipient = ?) ORDER BY timestamp ASC",
+                        (chat_type, self.connected_clients[client].username, recipient))
+        messages = cursor.fetchall()
+        cursor.close()
+
+        if messages:
+            # Format messages as a list of strings
+            print(f"messages found {messages}")
+            formatted_messages = [f"{msg[0]}: {msg[1]}" for msg in messages]
+            load_message = json.dumps({"type": "load", "content": formatted_messages})
+            await client.send(load_message)
+        else:
+            no_messages_msg = json.dumps({
+                    "type": "server",  # Indicates this is a server-generated message
+                    "content": "No previous messages found."  # Informative message for the client
+                })
+            await client.send(no_messages_msg)
+            return
+
+
+
+
+
+
+        if messages:
+            # Format messages as a list of strings
+            formatted_messages = [f"{msg[0]}: {msg[1]}" for msg in messages]
+            load_message = json.dumps({"type": "load", "content": formatted_messages})
+            await client.send(load_message)
+
+
+
+    async def switch_chat_mode(self, client, chat_type, recipient=None):
+        """Switch between group chat and DMs."""
+        if recipient :
+            await self.send_previous_messages(client, "private", recipient)
+        else :
+             await self.send_previous_messages(client, "group")
+
+
+    async def messaging(self, client):
+            rate_limiter = self.rate_limiter.get(client)
+            if rate_limiter is None:
+                self.rate_limiter[client] = RateLimiter(max_messages=1, time_period=1)  # 5 messages per second
+                rate_limiter = self.rate_limiter[client]
+
+            async for json_msg in client:
+                # Check if the user has exceeded the message limit
+                msg_data = json.loads(json_msg)
+                message = msg_data.get("content")
+                chat_type = msg_data.get("type")  # 'group' or 'private'
+                recipient = msg_data.get("recipient")  # For DMs, stores the recipient's username
+
+                if chat_type == "switch_mode" :
+                    await self.switch_chat_mode(client, chat_type, recipient)
+                    continue  
+                    
+
+                if not rate_limiter.can_send_message():
+                    msg_json = {
+                        "type": "server",
+                        "content": "You are sending messages too quickly. Please wait before sending another message."
+                    }
+                    await client.send(json.dumps(msg_json))
+                    continue
+
+                username = self.connected_clients[client].username
+                formatted_message = f"{username}: {message}"
+
+                # Save the message to the database
+                cursor = self.db.cursor()
+                cursor.execute("INSERT INTO messages (username, message, chat_type, recipient) VALUES (?, ?, ?, ?)",
+                            (username, formatted_message, chat_type, recipient))
+                self.db.commit()
+                cursor.close()
+
+                # Broadcast the message to the appropriate clients
+                if chat_type == "group":
+                    await self.chat_broadcast(formatted_message, client)
+                elif chat_type == "private":
+                    await self.send_dm(username, recipient, formatted_message)
+
+
+
+
+
+    def send_dm(self) :
+        pass
+
 
 
 
@@ -273,6 +397,12 @@ class Server :
                 cursor.execute("INSERT INTO users VALUES (?, ?)", (username, hashed_password))
                 cursor.close()
                 self.db.commit() # save the changes to the db
+                all_users = await self.get_all_users()
+                msg_json = {
+                    "type": "user_list",
+                    "content": all_users
+                }
+                broadcast(set(self.connected_clients.keys()), json.dumps(msg_json))
                 msg_json["content"] = f"Welcome to SecureChat, {username}! 🎉\nYou have successfully registered. Enjoy secure and private conversations!"
                 await client.send(json.dumps(msg_json)) 
                 return user

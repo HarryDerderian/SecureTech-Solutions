@@ -372,6 +372,11 @@ class Server :
                     msg_json["content"] = f"Welcome back, {username}! 🔐\nYou are now securely connected to SecureChat. Enjoy your conversation!"
                     await client.send(json.dumps(msg_json))  
                     cursor.close()
+                    msg_json = {
+                            "type": "server",
+                            "username": username
+                        }
+                    await client.send(json.dumps(msg_json)) 
                     return user
             else:
                 msg_json["content"] = "Invalid credentials. Please try again."

@@ -26,7 +26,8 @@ class Client:
         self.connected = False
         self.server_dc = True # block reconnecting
         self.connecting = False
-        self.reconnect_attempts = 0  
+        self.reconnect_attempts = 0
+        self.username = None  
 
 
 
@@ -38,6 +39,9 @@ class Client:
                         print(msg_json)
                         # Normal message 
                         if msg_json.get("type") == "group" or msg_json.get("type") == "server":
+                            if msg_json.get("username") and msg_json.get("type") == "server":
+                                self.username = msg_json.get("username")
+                                self.gui.update_logged_in_status(f"User: {self.username}")
                             sender = msg_json.get("sender", "")
                             content = msg_json.get("content", "")
                             
@@ -120,6 +124,8 @@ class Client:
                    print(str(e))
 
                 finally: # attempt to reconnect as long as the server did not dc us aka we lost connection on our own
+                    self.username = None
+                    self.gui.update_logged_in_status("")
                     if not self.server_dc :
                         self.connecting = True
                         self.connected = False
@@ -142,6 +148,8 @@ class Client:
             self.gui.current_dm_recipient = None 
             self.connected = False
             self.server_dc = True  
+            self.username = None
+            self.gui.update_logged_in_status("")
             self.gui.update_chat("[!] Disconnecting from server...")
             try:
                 await self.ws.close() 
@@ -181,6 +189,7 @@ class BasePage(Frame):
         self._add_logo()
         self._add_disconnect_button()
         self._add_close_button()
+        self._add_logged_in_label()
 
     def _build_root(self):
         self._root.title("SECURE CHAT")
@@ -221,6 +230,17 @@ class BasePage(Frame):
             bg="red", fg="white", command=self._main_app.quit
         )
         self.close_button.place(x=1260, y=20, width=120, height=50)
+
+
+    def _add_logged_in_label(self):
+        """Add a label to display the 'logged in' status."""
+        self.logged_in_label = Label(self._main_window, text="", fg="#00FF00", bg=self._BACKGROUND_COLOR,
+            font=("Lucida Console", 14))
+        self.logged_in_label.place(x=1100, y=500)  # Adjust position as needed
+
+    def update_logged_in_label(self, username):
+        """Update the 'logged in' label with the user's name."""
+        self.logged_in_label.config(text=username)
 
 
     def show(self):
@@ -578,6 +598,7 @@ class GUI:
                 self.current_page.update_chatbox(message)
 
     def update_user_list(self, user_list) :
+        user_list.remove(self.client.username)
         self.current_page.update_user_list(user_list)
 
 
@@ -603,7 +624,10 @@ class GUI:
         if self.current_page == self.pages["main"]:
             self.current_page.clear_chatbox()
 
-
+    def update_logged_in_status(self, username):
+        """Update the 'logged in' label on the current page."""
+        if self.current_page:
+            self.current_page.update_logged_in_label(username)
 
     def switch_to_group_chat(self):
         """Switch back to the main group chat."""
@@ -615,6 +639,10 @@ class GUI:
             )
         else:
             print("[!] Event loop is not running.")
+
+
+
+
 
 
 async def main():

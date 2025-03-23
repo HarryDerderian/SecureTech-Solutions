@@ -6,9 +6,11 @@ import pathlib
 import json
 import webbrowser
 import re
-
+import base64
+import os
 from tkinter import Tk, Frame, Label, Entry, Button, Text, END, Canvas, PhotoImage, DISABLED, NORMAL, RIGHT, LEFT, BOTH, WORD, X, Listbox, Toplevel
 
+from tkinter import filedialog
 
 from PIL import Image, ImageTk
 
@@ -27,8 +29,39 @@ class Client:
         self.server_dc = True # block reconnecting
         self.connecting = False
         self.reconnect_attempts = 0
-        self.username = None  
+        self.username = None
+        self.MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB # file uploads
 
+
+
+    async def upload_file(self, file_path):
+        if not self.connected or self.server_dc:
+            self.gui.update_chat("[!] Not connected to server.")
+            return
+
+        try:
+            file_size = os.path.getsize(file_path)
+            if file_size > self.MAX_FILE_SIZE:
+                self.gui.update_chat(f"[!] File is too large. Maximum size is {self.MAX_FILE_SIZE / (1024 * 1024)} MB.")
+                return
+            with open(file_path, 'rb') as file:
+                file_data = file.read()
+                file_name = pathlib.Path(file_path).name
+                file_base64 = base64.b64encode(file_data).decode('utf-8')
+                receiver = "group"
+                if self.gui.current_dm_recipient : receiver = "private"
+                msg_json = {
+                    "type": "file_upload",
+                    "file_name": file_name,
+                    "file_data": file_base64,
+                    "recipient": self.gui.current_dm_recipient,  # None for group chat
+                    "receiver": receiver
+                }
+
+                await self.send_message(msg_json)
+                self.gui.update_chat(msg_json,True)
+        except Exception as e:
+            self.gui.update_chat(f"[!] Error uploading file: {e}")
 
 
 
@@ -51,6 +84,27 @@ class Client:
                             if  msg_json.get("type") == "server" or self.gui.current_dm_recipient == None : 
                                 self.gui.update_chat(f"{sender}{content}")
                             
+                        elif msg_json.get("type") == "file_upload":
+                            file_name = msg_json.get("file_name")
+                            sender = msg_json.get("sender", "")
+                            self.gui.update_chat(msg_json, True) 
+                                    
+                        
+                        elif msg_json.get("type") == "file_download":
+                            self.gui.current_page.lock_ui()
+                            file_name = msg_json.get("file_name")
+                            file_data = msg_json.get("file_data")
+
+                            # Decode the file data
+                            file_bytes = base64.b64decode(file_data)
+
+                            # Save the file to a directory
+                            save_path = pathlib.Path(file_name)
+                            with open(save_path, 'wb') as file:
+                                file.write(file_bytes)
+                            self.gui.update_chat(f"[+] File '{file_name}' downloaded successfully.")
+                            self.gui.unlock_ui() 
+
                         # Handle "user_list" message type
                         elif msg_json.get("type") == "user_list":
                             self.gui.update_user_list(msg_json.get("content"))
@@ -77,6 +131,28 @@ class Client:
                    except Exception as e :
                         print(str(e))  
                         
+
+
+    async def download_file(self, file_name):
+        """Request a file download from the server."""
+        if not self.connected or self.server_dc:
+            self.gui.update_chat("[!] Not connected to server.")
+            return
+
+        # Lock the UI
+        self.gui.current_page.lock_ui()
+
+        try:
+            msg_json = {
+                "type": "file_download",
+                "file_name": file_name
+            }
+            await self.send_message(msg_json)
+        except Exception as e:
+            self.gui.update_chat(f"[!] Error during download: {e}")
+        finally:
+            # Unlock the UI
+            self.gui.current_page.unlock_ui()
 
 
 
@@ -111,7 +187,7 @@ class Client:
              while not self.server_dc:
                 try:
                     self.gui.update_chat("[+] Attempting to connect...")
-                    self.ws = await websockets.connect(self.URI, ssl=self.ssl_context)
+                    self.ws = await websockets.connect(self.URI, ssl=self.ssl_context,   max_size= self.MAX_FILE_SIZE)
                     self.connected = True
                     self.reconnect_attempts = 0  # Reset after a successful connection
                     self.gui.update_chat("[+] Connected to server.")
@@ -262,7 +338,29 @@ class ChatPage(BasePage):
         self._root.bind("<Return>", self.on_enter_pressed)
         self._add_sidebar()
         self._add_back_to_group_button()
+        self._add_file_upload_button()
 
+    def lock_ui(self):
+        """Disable UI elements to prevent interaction during download."""
+        self.file_upload_button.config(state=DISABLED)
+        self.send_button.config(state=DISABLED)
+        self.input_entry.config(state=DISABLED)
+        self.clear_button.config(state=DISABLED)
+        self.back_to_group_button.config(state=DISABLED)
+        self.emoji_button.config(state=DISABLED)
+        self.disconnect_button.config(state=DISABLED)
+
+    def unlock_ui(self):
+        """Re-enable UI elements after download is complete."""
+        self.file_upload_button.config(state=NORMAL)
+        self.send_button.config(state=NORMAL)
+        self.input_entry.config(state=NORMAL)
+        self.clear_button.config(state=NORMAL)
+        self.back_to_group_button.config(state=NORMAL)
+        self.emoji_button.config(state=NORMAL)
+        self.disconnect_button.config(state=NORMAL)
+    
+    
     def _chatbox(self):
         self.chat_display = Text(
             self._main_window, bg=self._BACKGROUND_COLOR, fg=self._TEXT_COLOR,
@@ -293,74 +391,107 @@ class ChatPage(BasePage):
             self.chat_display.delete("1.0", "end")
             self.chat_display.config(state="disabled")
 
+    def on_file_link_click(self, file_name):
+        """Handle file link clicks and initiate the download."""
+        if self._main_app.client.connected:
+            asyncio.run_coroutine_threadsafe(self._main_app.client.download_file(file_name), self._main_app.loop)
+        else:
+            self.update_chatbox("[!] Not connected to server.")
 
-    def update_chatbox(self, message):
+    def update_chatbox(self, message, is_file=None):
         self.chat_display.config(state="normal")
+        if is_file:
+                # Handle file upload message (message is a JSON/dictionary)
+                file_name = message.get("file_name")
+                sender = message.get("sender")
+                content = f"[+] File uploaded: {file_name} by {sender}"
 
-        i = 0
-        length = len(message)
+                # Insert the file name as a clickable link
+                self.chat_display.insert("end", content + "\n", "normal")
+                self.chat_display.insert("end", file_name, ("link",))
+                self.chat_display.insert("end", "\n", "normal")
 
-        while i < length:
-            # Handle bold (**)
-            if message[i:i+2] == '**':  # Check for bold markers
-                # Find the closing '**' for bold text
-                end = message.find('**', i + 2)
-                if end == -1:  # If no closing '**', treat the rest as normal text
-                    part = message[i + 2:]
-                    self.chat_display.insert("end", part)
-                    break
+                # Bind the click event to the file name
+                self.chat_display.tag_bind("link", "<Button-1>", lambda event, file_name=file_name: self.on_file_link_click(file_name))
+        else:
+            i = 0
+            length = len(message)
+
+            while i < length:
+                # Handle bold (**)
+                if message[i:i+2] == '**':  # Check for bold markers
+                    # Find the closing '**' for bold text
+                    end = message.find('**', i + 2)
+                    if end == -1:  # If no closing '**', treat the rest as normal text
+                        part = message[i + 2:]
+                        self.chat_display.insert("end", part)
+                        break
+                    else:
+                        # Insert bold part
+                        self.chat_display.insert("end", message[i + 2:end], "bold")
+                        i = end + 2  # Skip past the closing '**'
+                
+                # Handle italics (*)
+                elif message[i] == '*':  # Check for italic markers
+                    # Find the closing '*' for italic text
+                    end = message.find('*', i + 1)
+                    if end == -1:  # If no closing '*', treat the rest as normal text
+                        part = message[i + 1:]
+                        self.chat_display.insert("end", part)
+                        break
+                    else:
+                        # Insert italic part
+                        self.chat_display.insert("end", message[i + 1:end], "italic")
+                        i = end + 1  # Skip past the closing '*'
+                
+                # Handle underline (__)
+                elif message[i:i+2] == '__':  # Check for underline markers
+                    # Find the closing '__' for underline text
+                    end = message.find('__', i + 2)
+                    if end == -1:  # If no closing '__', treat the rest as normal text
+                        part = message[i + 2:]
+                        self.chat_display.insert("end", part)
+                        break
+                    else:
+                        # Insert underlined part
+                        self.chat_display.insert("end", message[i + 2:end], "underline")
+                        i = end + 2  # Skip past the closing '__'
+                
+                # Handle links (http:// or https://)
+                elif message[i:i+4] == "http":  # Check for links
+                    # Use regex to capture the full URL (including those with punctuation and spaces)
+                    url_match = re.match(r'(https?://[^\s]+)', message[i:])
+                    if url_match:
+                        url = url_match.group(0)
+                        self.chat_display.insert("end", url, "link")
+                        i += len(url)  # Skip past the link
+                    else:
+                        # If no valid link found, insert normal text
+                        self.chat_display.insert("end", message[i])
+                        i += 1
+                
                 else:
-                    # Insert bold part
-                    self.chat_display.insert("end", message[i + 2:end], "bold")
-                    i = end + 2  # Skip past the closing '**'
-            
-            # Handle italics (*)
-            elif message[i] == '*':  # Check for italic markers
-                # Find the closing '*' for italic text
-                end = message.find('*', i + 1)
-                if end == -1:  # If no closing '*', treat the rest as normal text
-                    part = message[i + 1:]
-                    self.chat_display.insert("end", part)
-                    break
-                else:
-                    # Insert italic part
-                    self.chat_display.insert("end", message[i + 1:end], "italic")
-                    i = end + 1  # Skip past the closing '*'
-            
-            # Handle underline (__)
-            elif message[i:i+2] == '__':  # Check for underline markers
-                # Find the closing '__' for underline text
-                end = message.find('__', i + 2)
-                if end == -1:  # If no closing '__', treat the rest as normal text
-                    part = message[i + 2:]
-                    self.chat_display.insert("end", part)
-                    break
-                else:
-                    # Insert underlined part
-                    self.chat_display.insert("end", message[i + 2:end], "underline")
-                    i = end + 2  # Skip past the closing '__'
-            
-            # Handle links (http:// or https://)
-            elif message[i:i+4] == "http":  # Check for links
-                # Use regex to capture the full URL (including those with punctuation and spaces)
-                url_match = re.match(r'(https?://[^\s]+)', message[i:])
-                if url_match:
-                    url = url_match.group(0)
-                    self.chat_display.insert("end", url, "link")
-                    i += len(url)  # Skip past the link
-                else:
-                    # If no valid link found, insert normal text
+                    # Insert normal text (no formatting)
                     self.chat_display.insert("end", message[i])
-                    i += 1
-            
-            else:
-                # Insert normal text (no formatting)
-                self.chat_display.insert("end", message[i])
-                i += 1  # Move to the next character
+                    i += 1  # Move to the next character
 
-        self.chat_display.insert("end", "\n")
-        self.chat_display.config(state="disabled")
-        self.chat_display.see("end")
+            self.chat_display.insert("end", "\n")
+            self.chat_display.config(state="disabled")
+            self.chat_display.see("end")
+    
+    def _add_file_upload_button(self):
+        self.file_upload_button = Button(
+            self._main_window, text="Upload", font=("Lucida Console", 14),
+            bg="#00FF00", fg="black", command=self.upload_file
+        )
+        self.file_upload_button.place(x=1260, y=100, width=120, height=50)
+
+    def upload_file(self):
+        file_path = filedialog.askopenfilename()
+        if file_path:
+            self._main_app.upload_file(file_path)
+
+
 
 
     def _input_box(self):
@@ -499,6 +630,16 @@ class GUI:
                 threading.Thread(target=self.run_asyncio_loop, daemon=True).start()
 
 
+    def lock_ui(self):
+        """Lock the UI elements."""
+        if self.current_page:
+            self.current_page.lock_ui()
+
+    def unlock_ui(self):
+        """Unlock the UI elements."""
+        if self.current_page:
+            self.current_page.unlock_ui()
+
 
     def disconnect(self):
         if self.client.connected:
@@ -571,9 +712,9 @@ class GUI:
         self.root.quit()
         self.root.destroy()
 
-    def update_chat(self, message):
+    def update_chat(self, message, is_file=None ):
         if self.current_page == self.pages["main"] or self.current_page == self.pages["dm"]:
-                self.current_page.update_chatbox(message)
+                self.current_page.update_chatbox(message,is_file)
 
     def switch_page(self, page_name):
         """Switch to a different page."""
@@ -641,7 +782,13 @@ class GUI:
             print("[!] Event loop is not running.")
 
 
-
+    def upload_file(self, filepath) :
+        if self.loop is not None:
+            asyncio.run_coroutine_threadsafe(
+               self.client.upload_file(filepath), self.loop
+            )
+        else:
+            print("[!] Event loop is not running.")
 
 
 

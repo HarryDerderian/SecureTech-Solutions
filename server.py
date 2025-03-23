@@ -7,7 +7,8 @@ import time
 import os
 import re
 import json
-
+import uuid
+import base64
 
 from websockets.asyncio.server import serve
 from websockets.asyncio.server import broadcast
@@ -66,6 +67,17 @@ def initialize_db():
                           timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                           )""")
         
+        cursor.execute("""CREATE TABLE IF NOT EXISTS files (
+                          id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          file_name TEXT,
+                          file_path TEXT,
+                          sender TEXT,
+                          recipient TEXT,
+                          chat_type TEXT,
+                          timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                          )""")
+
+
         conn.commit()  # Commit changes to the database
         conn.close()   # Close the connection
 
@@ -112,7 +124,7 @@ class Server :
 
 
     async def run(self):
-        server = await serve(self.handle_connection, self.HOST, self.PORT, ssl = self.ssl_context)
+        server = await serve(self.handle_connection, self.HOST, self.PORT, ssl = self.ssl_context,  max_size=100 * 1024 * 1024)
         print(f"SecureTech Solutions: SecureChat\nServer listening on wss://{self.HOST}:{self.PORT}")
         await server.wait_closed()
 
@@ -266,7 +278,62 @@ class Server :
                 if chat_type == "switch_mode" :
                     await self.switch_chat_mode(client, recipient)
                     continue  
-                    
+
+                if chat_type == "file_download":
+                    # Handle file download request
+                    file_name = msg_data.get("file_name")
+                    await self.handle_file_download(client, file_name)
+                    continue
+
+
+
+                if chat_type == "file_upload":
+                    # Handle file upload
+                    # Generate a unique identifier
+                    unique_id = uuid.uuid4().hex
+                    # Append the unique identifier to the file name
+                    file_name = msg_data.get("file_name")
+                    unique_file_name = f"{unique_id}_{file_name}"
+                    file_data = msg_data.get("file_data")
+                    receiver = msg_data.get("receiver")
+                    sender = self.connected_clients[client].username
+
+                    # Decode the file data
+                    file_bytes = base64.b64decode(file_data)
+
+                    # Save the file to a directory
+                    save_path = pathlib.Path("uploads") / unique_file_name
+                    with open(save_path, 'wb') as file:
+                        file.write(file_bytes)
+
+                    # Save file metadata to the database
+                    cursor = self.db.cursor()
+                    cursor.execute("""
+                        INSERT INTO files (file_name, file_path, sender, recipient, chat_type)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (file_name, str(save_path), sender, recipient, chat_type))
+                    self.db.commit()
+
+                    # Notify the recipient(s)
+                    if receiver == "group":
+                         broadcast(set(self.connected_clients.keys()).difference({client}),  json.dumps({
+                                "type": "file_upload",
+                                "file_name": file_name,
+                                "sender": sender,
+                                "content": f"File '{file_name}' uploaded by {sender}."
+                            }))
+                    elif receiver == "private":
+                         for client, user in self.connected_clients.items():
+                            if user.username == recipient:
+                                data = json.dumps({
+                                        "type": "file_upload",
+                                        "file_name": file_name,
+                                        "sender": sender,
+                                        "content": f"File '{file_name}' received from {sender}."
+                                    })
+                                await client.send(json.dumps(data))
+                                break
+                    continue
 
                 if not rate_limiter.can_send_message():
                     msg_json = {
@@ -302,6 +369,37 @@ class Server :
 
 
 
+
+    async def handle_file_download(self, client, file_name):
+        """Send the requested file to the client."""
+        cursor = self.db.cursor()
+        cursor.execute("SELECT file_path FROM files WHERE file_name = ?", (file_name,))
+        file_record = cursor.fetchone()
+        cursor.close()
+
+        if file_record:
+            file_path = file_record[0]
+            try:
+                with open(file_path, 'rb') as file:
+                    file_data = file.read()
+                    file_base64 = base64.b64encode(file_data).decode('utf-8')
+                    msg_json = {
+                        "type": "file_download",
+                        "file_name": file_name,
+                        "file_data": file_base64
+                    }
+                    await client.send(json.dumps(msg_json))
+            except Exception as e:
+                print(f"Error reading file: {e}")
+                await client.send(json.dumps({
+                    "type": "server",
+                    "content": f"Error downloading file '{file_name}'."
+                }))
+        else:
+            await client.send(json.dumps({
+                "type": "server",
+                "content": f"File '{file_name}' not found."
+            }))
 
 
     async def send_dm(self, sender, recipient, message):

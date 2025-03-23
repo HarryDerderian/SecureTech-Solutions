@@ -4,9 +4,10 @@ import ssl
 import threading
 import pathlib
 import json
+import webbrowser
+import re
 
-
-from tkinter import Tk, Frame, Label, Entry, Button, Text, END, Canvas, PhotoImage, DISABLED, NORMAL, RIGHT, LEFT, BOTH, WORD, X, Listbox
+from tkinter import Tk, Frame, Label, Entry, Button, Text, END, Canvas, PhotoImage, DISABLED, NORMAL, RIGHT, LEFT, BOTH, WORD, X, Listbox, Toplevel
 
 
 from PIL import Image, ImageTk
@@ -249,21 +250,102 @@ class ChatPage(BasePage):
         )
         self.chat_display.place(x=220, y=20, width=800, height=550)
 
+        # Tags for Italic and Bold
+        self.chat_display.tag_configure("italic", font=("Lucida Console", 14, "italic"))
+        self.chat_display.tag_configure("bold", font=("Lucida Console", 14, "bold")) # Use Arial for bold text
+        self.chat_display.tag_configure("underline", font=("Lucida Console", 14, "underline"))
+        self.chat_display.tag_configure("link", foreground="blue", underline=True)
+
+        self.chat_display.tag_bind("link", "<Button-1>", self.open_link)
+
+
+    def open_link(self, event):
+        index = self.chat_display.index(f"@{event.x},{event.y}")
+        tags = self.chat_display.tag_names(index)
+        if "link" in tags:
+            start, end = self.chat_display.tag_prevrange("link", index)
+            url = self.chat_display.get(start, end)
+            webbrowser.open(url) # Open the URL in default web browser
+
     def clear_chatbox(self):
         if hasattr(self, 'chat_display') and self.chat_display.winfo_exists():
             self.chat_display.config(state="normal")
             self.chat_display.delete("1.0", "end")
             self.chat_display.config(state="disabled")
 
+
     def update_chatbox(self, message):
         self.chat_display.config(state="normal")
-        self.chat_display.insert("end", message + "\n")
+
+        i = 0
+        length = len(message)
+
+        while i < length:
+            # Handle bold (**)
+            if message[i:i+2] == '**':  # Check for bold markers
+                # Find the closing '**' for bold text
+                end = message.find('**', i + 2)
+                if end == -1:  # If no closing '**', treat the rest as normal text
+                    part = message[i + 2:]
+                    self.chat_display.insert("end", part)
+                    break
+                else:
+                    # Insert bold part
+                    self.chat_display.insert("end", message[i + 2:end], "bold")
+                    i = end + 2  # Skip past the closing '**'
+            
+            # Handle italics (*)
+            elif message[i] == '*':  # Check for italic markers
+                # Find the closing '*' for italic text
+                end = message.find('*', i + 1)
+                if end == -1:  # If no closing '*', treat the rest as normal text
+                    part = message[i + 1:]
+                    self.chat_display.insert("end", part)
+                    break
+                else:
+                    # Insert italic part
+                    self.chat_display.insert("end", message[i + 1:end], "italic")
+                    i = end + 1  # Skip past the closing '*'
+            
+            # Handle underline (__)
+            elif message[i:i+2] == '__':  # Check for underline markers
+                # Find the closing '__' for underline text
+                end = message.find('__', i + 2)
+                if end == -1:  # If no closing '__', treat the rest as normal text
+                    part = message[i + 2:]
+                    self.chat_display.insert("end", part)
+                    break
+                else:
+                    # Insert underlined part
+                    self.chat_display.insert("end", message[i + 2:end], "underline")
+                    i = end + 2  # Skip past the closing '__'
+            
+            # Handle links (http:// or https://)
+            elif message[i:i+4] == "http":  # Check for links
+                # Use regex to capture the full URL (including those with punctuation and spaces)
+                url_match = re.match(r'(https?://[^\s]+)', message[i:])
+                if url_match:
+                    url = url_match.group(0)
+                    self.chat_display.insert("end", url, "link")
+                    i += len(url)  # Skip past the link
+                else:
+                    # If no valid link found, insert normal text
+                    self.chat_display.insert("end", message[i])
+                    i += 1
+            
+            else:
+                # Insert normal text (no formatting)
+                self.chat_display.insert("end", message[i])
+                i += 1  # Move to the next character
+
+        self.chat_display.insert("end", "\n")
         self.chat_display.config(state="disabled")
         self.chat_display.see("end")
 
+
     def _input_box(self):
         self.input_entry = Entry(
-            self._main_window, font=("Arial", 14), bg="gray20", fg="white", insertbackground="#00FF00"
+            self._main_window, font=("Arial", 14), bg="gray20", fg="white", insertbackground="#00FF00" 
         )
         self.input_entry.place(x=220, y=600, width=800, height=50)
 
@@ -272,6 +354,42 @@ class ChatPage(BasePage):
             bg="#00FF00", fg="black", command=self._send_message
         )
         self.send_button.place(x=1050, y=600, width=120, height=50)
+
+
+        # Emoji picker button
+        self.emoji_button = Button(self._main_window, text="😀", font=("Arial", 14), bg="#00FF00", command=self.open_emoji_picker)
+        self.emoji_button.place(x=980, y=600, width=50, height=50)       
+
+    
+    def open_emoji_picker(self):
+        emoji_picker = Toplevel(self._main_window)
+        emoji_picker.title("Emojis")
+        emoji_picker.geometry("300x300")
+        emoji_picker.configure(bg="black")
+
+        # Emoji list
+        emojis = [
+            "😀", "😁", "😂", "😃", "😄", "😅", "😆", "😇", "😉", "😊",
+            "😋", "😎", "😍", "😘", "😗", "😙", "😚", "😜", "😝", "😭", 
+            "😢", "😿", "😡", "😠", "😶", "😏", "😪", "😴", "😈", "☠️"]
+        
+        # Add buttons for each emoji
+        for i, emoji in enumerate(emojis):
+            emoji_button = Button(emoji_picker, text=emoji, font=("Arial", 14), bg="#00FF00", command=lambda e=emoji: self.insert_emoji(e))
+            emoji_button.grid(row=i // 5, column=i % 5, padx=5, pady=5)
+
+
+    def insert_emoji(self, emoji):
+        current_text = self.input_entry.get()
+        self.input_entry.delete(0, "end")
+        self.input_entry.insert("end", current_text + emoji)
+
+
+    def close_emoji_picker(self):
+        if self.emoji_picker_window:
+            self.emoji_picker_window.destroy()
+            self.emoji_picker_window = None
+
 
     def _send_message(self):
         message = self.input_entry.get().strip()

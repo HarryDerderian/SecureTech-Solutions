@@ -33,7 +33,6 @@ class Client:
     async def receive_messages(self):
                 async for message in self.ws:
                    try :
-                        print(message)
                         msg_json = json.loads(message)
                         print(msg_json)
                         # Normal message 
@@ -50,7 +49,8 @@ class Client:
                         elif msg_json.get("type") == "private":
                                 sender = msg_json.get("sender", "Unknown")
                                 content = msg_json.get("content")
-                                self.gui.update_chat(f"[Private from {sender}]: {content}")
+                                if sender == self.gui.current_dm_recipient :
+                                     self.gui.update_chat(f"{sender}]: {content}")
 
                             # Handle disconnect messages
                         elif message == "You have been disconnected by the server.":
@@ -425,13 +425,40 @@ class GUI:
         if self.current_page == self.pages["main"]:
             self.current_page.disconnect_button.config(text="Connect", bg="#00FF00", fg="black", state="normal")
 
+    
+    
+    
     def send_message(self, message):
         if not self.client.connected or self.client.server_dc:
             self.current_page.update_chatbox("[!] Not connected to server.")
         else:
-            self.current_page.update_chatbox(f"You: {message}")
-            msg_json = {"type": "group", "content": message}
+            # Determine the chat type and recipient
+            if self.current_dm_recipient:
+                chat_type = "private"
+                recipient = self.current_dm_recipient
+                print(f"sending message to {recipient}")
+            else:
+                chat_type = "group"
+                recipient = None
+                print("sending group message")
+
+            # Update the chat display
+            if chat_type == "private":
+                self.current_page.update_chatbox(f"You: {message}")
+            else:
+                self.current_page.update_chatbox(f"You: {message}")
+
+            # Prepare the message payload
+            msg_json = {
+                "type": chat_type,  # 'group' or 'private'
+                "content": message,
+                "recipient": recipient  # Only for DMs
+            }
+
+            # Send the message to the server
             asyncio.run_coroutine_threadsafe(self.client.send_message(msg_json), self.loop)
+    
+    
 
     def quit(self):
         self.root.quit()

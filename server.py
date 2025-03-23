@@ -190,12 +190,6 @@ class Server :
 
 
 
-
-
-
-
-
-
     async def send_previous_messages(self, client, chat_type, recipient=None):
         """Send previous messages for the specified chat type."""
         print("loading messages.......")
@@ -224,16 +218,6 @@ class Server :
             await client.send(no_messages_msg)
             return
 
-
-
-
-
-
-        if messages:
-            # Format messages as a list of strings
-            formatted_messages = [f"{msg[0]}: {msg[1]}" for msg in messages]
-            load_message = json.dumps({"type": "load", "content": formatted_messages})
-            await client.send(load_message)
 
 
 
@@ -272,7 +256,7 @@ class Server :
                     continue
 
                 username = self.connected_clients[client].username
-                formatted_message = f"{username}: {message}"
+                formatted_message = f"{message}"
 
                 # Save the message to the database
                 cursor = self.db.cursor()
@@ -291,8 +275,17 @@ class Server :
 
 
 
-    def send_dm(self) :
-        pass
+    async def send_dm(self, sender, recipient, message):
+        """Send a direct message to the specified recipient."""
+        for client, user in self.connected_clients.items():
+            if user.username == recipient:
+                msg_json = {
+                    "type": "private",
+                    "sender": sender,
+                    "content": message
+                }
+                await client.send(json.dumps(msg_json))
+                break
 
 
 

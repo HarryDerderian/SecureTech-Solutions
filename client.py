@@ -37,8 +37,15 @@ class Client:
                         print(msg_json)
                         # Normal message 
                         if msg_json.get("type") == "group" or msg_json.get("type") == "server":
-                                self.gui.update_chat(msg_json.get("content"))
-                        
+                            sender = msg_json.get("sender", "")
+                            content = msg_json.get("content", "")
+                            
+                            # Append colon only if sender is not empty
+                            if sender:
+                                sender += ": "
+                            if  msg_json.get("type") == "server" or self.gui.current_dm_recipient == None : 
+                                self.gui.update_chat(f"{sender}{content}")
+                            
                         # Handle "user_list" message type
                         elif msg_json.get("type") == "user_list":
                             self.gui.update_user_list(msg_json.get("content"))
@@ -47,10 +54,15 @@ class Client:
                             self.gui.load_current_page(msg_json.get("content"))
                         # dms
                         elif msg_json.get("type") == "private":
-                                sender = msg_json.get("sender", "Unknown")
-                                content = msg_json.get("content")
-                                if sender == self.gui.current_dm_recipient :
-                                     self.gui.update_chat(f"{sender}]: {content}")
+                            sender = msg_json.get("sender", "")
+                            content = msg_json.get("content", "")
+                            
+                            # Append colon only if sender is not empty
+                           
+                            if sender == self.gui.current_dm_recipient :
+                                     if sender:
+                                        sender += ": "
+                                     self.gui.update_chat(f"{sender}{content}")
 
                             # Handle disconnect messages
                         elif message == "You have been disconnected by the server.":
@@ -75,10 +87,6 @@ class Client:
         # Notify the server about the chat mode switch
         msg_json = {"type": "switch_mode", "mode": mode, "recipient": recipient}
         await self.send_message(msg_json)
-
-        # Request chat logs from the server if switching to DM
-        if mode == "private" and recipient:
-            await self.request_chat_logs(recipient)
 
 
     async def request_chat_logs(self, recipient):
@@ -114,6 +122,7 @@ class Client:
                     if not self.server_dc :
                         self.connecting = True
                         self.connected = False
+                        self.gui.current_dm_recipient = None
                         if not self.gui.current_page.disconnect_button.cget("text") == "Connecting":
                             self.gui.current_page.disconnect_button.config(text="Connecting", bg="#00FF00", fg="black", state="disabled")
                         # Wait before reconnecting using exponential backoff
@@ -128,6 +137,8 @@ class Client:
 
     async def dc(self):
         if self.connected:  
+            await self.switch_chat_mode("group") # reset the state of the gui
+            self.gui.current_dm_recipient = None 
             self.connected = False
             self.server_dc = True  
             self.gui.update_chat("[!] Disconnecting from server...")
@@ -229,6 +240,7 @@ class ChatPage(BasePage):
         self._add_clear_button()
         self._root.bind("<Return>", self.on_enter_pressed)
         self._add_sidebar()
+        self._add_back_to_group_button()
 
     def _chatbox(self):
         self.chat_display = Text(
@@ -302,62 +314,17 @@ class ChatPage(BasePage):
         for user in user_list:
             self.user_listbox.insert(END, user)
 
-
-class LoginPage(BasePage):
-    def __init__(self, root, main_app):
-        super().__init__(root, main_app)
-        self.is_login_mode = True  # Default to login mode
-        self._add_login_interface()
-
-
-    def _add_login_interface(self):
-        # Username
-        self.username_label = Label(self._main_window, text="Username:", font=("Lucida Console", 14), bg=self._BACKGROUND_COLOR, fg=self._TEXT_COLOR)
-        self.username_label.place(x=400, y=200)
-        self.username_entry = Entry(self._main_window, font=("Lucida Console", 14), bg="gray20", fg="white", insertbackground="#00FF00")
-        self.username_entry.place(x=550, y=200, width=200)
-
-        # Password
-        self.password_label = Label(self._main_window, text="Password:", font=("Lucida Console", 14), bg=self._BACKGROUND_COLOR, fg=self._TEXT_COLOR)
-        self.password_label.place(x=400, y=250)
-        self.password_entry = Entry(self._main_window, show="*", font=("Lucida Console", 14), bg="gray20", fg="white", insertbackground="#00FF00")
-        self.password_entry.place(x=550, y=250, width=200)
-
-        # Confirm Password (hidden by default)
-        self.confirm_password_label = Label(self._main_window, text="Confirm Password:", font=("Lucida Console", 14), bg=self._BACKGROUND_COLOR, fg=self._TEXT_COLOR)
-        self.confirm_password_entry = Entry(self._main_window, show="*", font=("Lucida Console", 14), bg="gray20", fg="white", insertbackground="#00FF00")
-
-        # Toggle Button
-        self.toggle_button = Button(
-            self._main_window, text="Switch to Register", font=("Lucida Console", 14),
-            bg="#00FF00", fg="black", command=self.toggle_mode
+    def _add_back_to_group_button(self):
+        """Add a button to switch back to the main group chat."""
+        self.back_to_group_button = Button(
+            self._main_window, text="Group", font=("Lucida Console", 14),
+            bg="#00FF00", fg="black", command=self._main_app.switch_to_group_chat
         )
-        self.toggle_button.place(x=550, y=360, width=200, height=50)
-
-        # Submit Button
-        self.submit_button = Button(
-            self._main_window, text="Login", font=("Lucida Console", 14),
-            bg="#00FF00", fg="black", command=self._main_app.submit_credentials
-        )
-        self.submit_button.place(x=550, y=420, width=120, height=50)
-
-    def toggle_mode(self):
-        """Toggle between login and register modes."""
-        self.is_login_mode = not self.is_login_mode
-        if self.is_login_mode:
-            self.toggle_button.config(text="Switch to Register")
-            self.submit_button.config(text="Login")
-            self.confirm_password_label.place_forget()
-            self.confirm_password_entry.place_forget()
-        else:
-            self.toggle_button.config(text="Switch to Login")
-            self.submit_button.config(text="Register")
-            self.confirm_password_label.place(x=400, y=300)
-            self.confirm_password_entry.place(x=550, y=300, width=200)
+        self.back_to_group_button.place(x=1050, y=100, width=120, height=50)
 
 
 
-            self.user_listbox.insert(END, user)
+
 
 
 class GUI:
@@ -367,7 +334,7 @@ class GUI:
         self.loop = None
         self.pages = {}  # Dictionary to store pages
         self.current_page = None  # Track the current page
-        self.pages["login"] = LoginPage(self.root, self)
+      #  self.pages["login"] = LoginPage(self.root, self)
         self.pages["main"] = ChatPage(self.root, self)
         self.switch_page("main")
         self.current_dm_recipient = None
@@ -398,8 +365,10 @@ class GUI:
     def disconnect(self):
         if self.client.connected:
             if not self.current_page == self.pages["main"] : self.switch_page("main")
+            self.current_dm_recipient = None
             asyncio.run_coroutine_threadsafe(self.client.dc(), self.loop)
             self.current_page.disconnect_button.config(text="Connect", bg="#00FF00", fg="black")
+
 
     def run_asyncio_loop(self):
         self.loop = asyncio.new_event_loop()
@@ -476,14 +445,7 @@ class GUI:
         self.current_page = self.pages[page_name]
         self.current_page.show()  # Show the new page
 
-    def submit_credentials(self):
-        username = self.pages["login"].username_entry.get()
-        password = self.pages["login"].password_entry.get()
-        print(username)
-        print(password)
 
-        # After a successful login, switch to the main page
-        self.switch_page("main")
 
     def connection_successful(self):
         """Update the button state and text after a successful connection."""
@@ -503,6 +465,10 @@ class GUI:
 
     def switch_to_dm(self, recipient):
         """Switch to a DM chat with the selected user."""
+        if not self.client.connected or self.client.server_dc:
+            self.current_page.update_chatbox("[!] You must be connected to the server to start a DM.")
+            return
+        
         self.current_dm_recipient = recipient
         self.current_page.update_chatbox(f"[+] Started DM with {recipient}.")
         # Request previous DMs from the server
@@ -518,6 +484,19 @@ class GUI:
         """Clear the chat display."""
         if self.current_page == self.pages["main"]:
             self.current_page.clear_chatbox()
+
+
+
+    def switch_to_group_chat(self):
+        """Switch back to the main group chat."""
+        self.current_dm_recipient = None
+        self.current_page.update_chatbox("[+] Switched back to group chat.")
+        if self.loop is not None:
+            asyncio.run_coroutine_threadsafe(
+                self.client.switch_chat_mode("group"), self.loop
+            )
+        else:
+            print("[!] Event loop is not running.")
 
 
 async def main():

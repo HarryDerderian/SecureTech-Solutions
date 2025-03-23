@@ -62,6 +62,7 @@ def initialize_db():
                           message TEXT,
                           chat_type TEXT, 
                           recipient TEXT, 
+                          conversation_id TEXT,
                           timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                           )""")
         
@@ -198,10 +199,21 @@ class Server :
         if chat_type == "group":
             cursor.execute("SELECT username, message FROM messages WHERE chat_type = ? ORDER BY timestamp ASC", (chat_type,))
         elif chat_type == "private":
-            print("inside send prev")
-            cursor.execute("SELECT username, message FROM messages WHERE chat_type = ? AND (username = ? OR recipient = ?) ORDER BY timestamp ASC",
-                        (chat_type, self.connected_clients[client].username, recipient))
-        messages = cursor.fetchall()
+             current_user = self.connected_clients[client].username
+
+            # Generate conversation_id based on usernames in alphabetical order
+             conversation_id = "_".join(sorted([current_user, recipient]))
+
+            # Fetch messages for the conversation_id
+             cursor.execute("""
+                SELECT username, message 
+                FROM messages 
+                WHERE conversation_id = ?
+                ORDER BY timestamp ASC
+            """, (conversation_id,))
+
+        # Fetch all results
+        messages = cursor.fetchall()     
         cursor.close()
 
         if messages:
@@ -220,8 +232,17 @@ class Server :
 
 
 
+    
+    def generate_conversation_id(user1, user2):
+        """Generate a unique conversation ID based on usernames in alphabetical order."""
+        return "_".join(sorted([user1, user2]))
 
-    async def switch_chat_mode(self, client, chat_type, recipient=None):
+
+
+
+
+
+    async def switch_chat_mode(self, client, recipient=None):
         """Switch between group chat and DMs."""
         if recipient :
             await self.send_previous_messages(client, "private", recipient)
@@ -243,7 +264,7 @@ class Server :
                 recipient = msg_data.get("recipient")  # For DMs, stores the recipient's username
 
                 if chat_type == "switch_mode" :
-                    await self.switch_chat_mode(client, chat_type, recipient)
+                    await self.switch_chat_mode(client, recipient)
                     continue  
                     
 
@@ -258,16 +279,24 @@ class Server :
                 username = self.connected_clients[client].username
                 formatted_message = f"{message}"
 
-                # Save the message to the database
                 cursor = self.db.cursor()
-                cursor.execute("INSERT INTO messages (username, message, chat_type, recipient) VALUES (?, ?, ?, ?)",
-                            (username, formatted_message, chat_type, recipient))
+                if chat_type == "group":
+                    cursor.execute("INSERT INTO messages (username, message, chat_type, recipient, conversation_id) VALUES (?, ?, ?, ?, ?)",
+                                (username, message, chat_type, None, None))  # No recipient or conversation_id for group messages
+                elif chat_type == "private":
+                    # Generate conversation_id based on usernames in alphabetical order
+                    conversation_id = "_".join(sorted([username, recipient]))
+                    cursor.execute("INSERT INTO messages (username, message, chat_type, recipient, conversation_id) VALUES (?, ?, ?, ?, ?)",
+                                (username, message, chat_type, recipient, conversation_id))
                 self.db.commit()
-                cursor.close()
+
+
+
+
 
                 # Broadcast the message to the appropriate clients
                 if chat_type == "group":
-                    await self.chat_broadcast(formatted_message, client)
+                    await self.chat_broadcast(formatted_message, client, username,"group")
                 elif chat_type == "private":
                     await self.send_dm(username, recipient, formatted_message)
 
@@ -299,10 +328,12 @@ class Server :
     
 
 
-    async def chat_broadcast(self, message, excluded_client = None):
+    async def chat_broadcast(self, message, excluded_client = None, sender = "", type="server"):
+         
          msg_json = {
-                "type": "server",
-                "content": message
+                "type": type,
+                "content": message,
+                "sender": sender,
          }
          broadcast(set(self.connected_clients.keys()).difference({excluded_client}), json.dumps(msg_json))
     

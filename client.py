@@ -550,9 +550,9 @@ class GUI:
                 print("sending group message")
 
             # Update the chat display
-            if chat_type == "private":
-                self.current_page.update_chatbox(f"You: {message}")
-            else:
+            if self.client.username :
+                self.current_page.update_chatbox(f"{self.client.username}: {message}")
+            else :
                 self.current_page.update_chatbox(f"You: {message}")
 
             # Prepare the message payload

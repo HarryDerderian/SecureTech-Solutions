@@ -434,6 +434,11 @@ class Server :
                 broadcast(set(self.connected_clients.keys()), json.dumps(msg_json))
                 msg_json["content"] = f"Welcome to SecureChat, {username}! 🎉\nYou have successfully registered. Enjoy secure and private conversations!"
                 await client.send(json.dumps(msg_json)) 
+                msg_json = {
+                            "type": "server",
+                            "username": username
+                        }
+                await client.send(json.dumps(msg_json)) 
                 return user
            except Exception as e:
                     print(f"Error during registration: {e}")  # Log the error

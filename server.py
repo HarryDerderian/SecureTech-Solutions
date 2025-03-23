@@ -531,6 +531,7 @@ class Server :
                 }
                 broadcast(set(self.connected_clients.keys()), json.dumps(msg_json))
                 msg_json["content"] = f"Welcome to SecureChat, {username}! 🎉\nYou have successfully registered. Enjoy secure and private conversations!"
+                msg_json["type"] = "server"
                 await client.send(json.dumps(msg_json)) 
                 msg_json = {
                             "type": "server",

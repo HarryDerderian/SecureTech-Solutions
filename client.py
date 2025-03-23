@@ -55,7 +55,8 @@ class Client:
                     "file_name": file_name,
                     "file_data": file_base64,
                     "recipient": self.gui.current_dm_recipient,  # None for group chat
-                    "receiver": receiver
+                    "receiver": receiver,
+                    "sender": self.username
                 }
 
                 await self.send_message(msg_json)
@@ -70,8 +71,23 @@ class Client:
                    try :
                         msg_json = json.loads(message)
                         print(msg_json)
+                        
+                        if not isinstance(msg_json, dict):
+                            print(f"Expected a dictionary, but got: {type(msg_json)}")
+                            continue
+
+
+                        if msg_json.get("type") == "file_upload":
+                            print("file name")
+                            file_name = msg_json.get("file_name")
+                            print("file sender")
+                            sender = msg_json.get("sender", "")
+                            print("update chat")
+                            self.gui.update_chat(msg_json, True)
+                            continue 
+                        
                         # Normal message 
-                        if msg_json.get("type") == "group" or msg_json.get("type") == "server":
+                        elif msg_json.get("type") == "group" or msg_json.get("type") == "server":
                             if msg_json.get("username") and msg_json.get("type") == "server":
                                 self.username = msg_json.get("username")
                                 self.gui.update_logged_in_status(f"User: {self.username}")
@@ -84,10 +100,7 @@ class Client:
                             if  msg_json.get("type") == "server" or self.gui.current_dm_recipient == None : 
                                 self.gui.update_chat(f"{sender}{content}")
                             
-                        elif msg_json.get("type") == "file_upload":
-                            file_name = msg_json.get("file_name")
-                            sender = msg_json.get("sender", "")
-                            self.gui.update_chat(msg_json, True) 
+                        
                                     
                         
                         elif msg_json.get("type") == "file_download":
@@ -402,6 +415,7 @@ class ChatPage(BasePage):
         self.chat_display.config(state="normal")
         if is_file:
                 # Handle file upload message (message is a JSON/dictionary)
+                print("test")
                 file_name = message.get("file_name")
                 sender = message.get("sender")
                 content = f"[+] File uploaded: {file_name} by {sender}"
@@ -714,6 +728,7 @@ class GUI:
 
     def update_chat(self, message, is_file=None ):
         if self.current_page == self.pages["main"] or self.current_page == self.pages["dm"]:
+                print("inside update chat")
                 self.current_page.update_chatbox(message,is_file)
 
     def switch_page(self, page_name):

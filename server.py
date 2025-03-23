@@ -323,15 +323,15 @@ class Server :
                                 "content": f"File '{file_name}' uploaded by {sender}."
                             }))
                     elif receiver == "private":
-                         for client, user in self.connected_clients.items():
+                         for cli, user in self.connected_clients.items():
                             if user.username == recipient:
-                                data = json.dumps({
+                                data = {
                                         "type": "file_upload",
                                         "file_name": file_name,
                                         "sender": sender,
                                         "content": f"File '{file_name}' received from {sender}."
-                                    })
-                                await client.send(json.dumps(data))
+                                    }
+                                await cli.send(json.dumps(data))
                                 break
                     continue
 

@@ -9,6 +9,7 @@ import re
 import json
 import uuid
 import base64
+import mimetypes
 
 from websockets.asyncio.server import serve
 from websockets.asyncio.server import broadcast
@@ -46,6 +47,9 @@ class RateLimiter:
 
 def initialize_db():
     # Check if the database file already exists
+    if not os.path.exists("uploads"):
+        os.makedirs("uploads")
+        
     if not os.path.exists("securechat.db"):
         conn = sqlite3.connect("securechat.db")
         cursor = conn.cursor()
@@ -67,13 +71,16 @@ def initialize_db():
                           timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                           )""")
         
+
         cursor.execute("""CREATE TABLE IF NOT EXISTS files (
                           id INTEGER PRIMARY KEY AUTOINCREMENT,
                           file_name TEXT,
                           file_path TEXT,
+                          file_type TEXT,  
                           sender TEXT,
                           recipient TEXT,
                           chat_type TEXT,
+                          conversation_id TEXT, 
                           timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                           )""")
 
@@ -203,44 +210,95 @@ class Server :
 
 
 
+
+
+
     async def send_previous_messages(self, client, chat_type, recipient=None):
-        """Send previous messages for the specified chat type."""
-        print("loading messages.......")
+            """Send previous messages for the specified chat type."""
+            print("loading messages.......")
+            
+            cursor = self.db.cursor()
+            if chat_type == "group":
+                cursor.execute("SELECT username, message FROM messages WHERE chat_type = ? ORDER BY timestamp ASC", (chat_type,))
+            elif chat_type == "private":
+                current_user = self.connected_clients[client].username
+                conversation_id = "_".join(sorted([current_user, recipient]))
+                cursor.execute("""
+                    SELECT username, message 
+                    FROM messages 
+                    WHERE conversation_id = ?
+                    ORDER BY timestamp ASC
+                """, (conversation_id,))
+
+            # Fetch all results
+            messages = cursor.fetchall()     
+            cursor.close()
+
+            if messages:
+                # Format messages as a list of strings
+                print(f"messages found {messages}")
+                formatted_messages = [f"{msg[0]}: {msg[1]}" for msg in messages]
+                load_message = json.dumps({"type": "load", "content": formatted_messages})
+                await client.send(load_message)
+            else:
+                no_messages_msg = json.dumps({
+                        "type": "server",  # Indicates this is a server-generated message
+                        "content": "No previous messages found."  # Informative message for the client
+                    })
+                await client.send(no_messages_msg)
+                return
+            await self.send_previous_files(client, chat_type, recipient)
+
+  
+
+
+    async def send_previous_files(self, client, chat_type, recipient=None):
+        """Send previous files for the specified chat type."""
+        print("loading files.......")
         
         cursor = self.db.cursor()
         if chat_type == "group":
-            cursor.execute("SELECT username, message FROM messages WHERE chat_type = ? ORDER BY timestamp ASC", (chat_type,))
+            cursor.execute("SELECT file_name, file_type, sender FROM files WHERE chat_type = ? ORDER BY timestamp ASC", (chat_type,))
         elif chat_type == "private":
-             current_user = self.connected_clients[client].username
-
-            # Generate conversation_id based on usernames in alphabetical order
-             conversation_id = "_".join(sorted([current_user, recipient]))
-
-            # Fetch messages for the conversation_id
-             cursor.execute("""
-                SELECT username, message 
-                FROM messages 
+            current_user = self.connected_clients[client].username
+            conversation_id = "_".join(sorted([current_user, recipient]))
+            cursor.execute("""
+                SELECT file_name, file_type, sender 
+                FROM files 
                 WHERE conversation_id = ?
                 ORDER BY timestamp ASC
             """, (conversation_id,))
 
         # Fetch all results
-        messages = cursor.fetchall()     
+        files = cursor.fetchall()     
         cursor.close()
 
-        if messages:
-            # Format messages as a list of strings
-            print(f"messages found {messages}")
-            formatted_messages = [f"{msg[0]}: {msg[1]}" for msg in messages]
-            load_message = json.dumps({"type": "load", "content": formatted_messages})
-            await client.send(load_message)
+        if files:
+            # Format files as a list of JSON objects
+            file_list = []
+            for file in files:
+                file_name, file_type, sender = file
+                file_info = {
+                    "file_name": file_name,
+                    "file_type": file_type,
+                    "sender": sender
+                }
+                file_list.append(file_info)
+
+            # Send the list of JSON objects to the client
+            load_files_msg = {
+                "type": "load_files",
+                "content": file_list  # List of JSON objects
+            }
+            await client.send(json.dumps(load_files_msg))
         else:
-            no_messages_msg = json.dumps({
+            no_files_msg = json.dumps({
                     "type": "server",  # Indicates this is a server-generated message
-                    "content": "No previous messages found."  # Informative message for the client
+                    "content": "No previous files found."  # Informative message for the client
                 })
-            await client.send(no_messages_msg)
+            await client.send(no_files_msg)
             return
+
 
 
 
@@ -286,54 +344,65 @@ class Server :
                     continue
 
 
-
                 if chat_type == "file_upload":
-                    # Handle file upload
-                    # Generate a unique identifier
-                    unique_id = uuid.uuid4().hex
-                    # Append the unique identifier to the file name
-                    file_name = msg_data.get("file_name")
-                    unique_file_name = f"{unique_id}_{file_name}"
-                    file_data = msg_data.get("file_data")
-                    receiver = msg_data.get("receiver")
-                    sender = self.connected_clients[client].username
+                        # Handle file upload
+                        unique_id = uuid.uuid4().hex
+                        file_name = msg_data.get("file_name")
+                        unique_file_name = f"{unique_id}_{file_name}"
+                        file_data = msg_data.get("file_data")
+                        receiver = msg_data.get("receiver")
+                        sender = self.connected_clients[client].username
 
-                    # Decode the file data
-                    file_bytes = base64.b64decode(file_data)
+                        # Decode the file data
+                        file_bytes = base64.b64decode(file_data)
 
-                    # Save the file to a directory
-                    save_path = pathlib.Path("uploads") / unique_file_name
-                    with open(save_path, 'wb') as file:
-                        file.write(file_bytes)
+                        # Save the file to a directory
+                        save_path = pathlib.Path("uploads") / unique_file_name
+                        with open(save_path, 'wb') as file:
+                            file.write(file_bytes)
 
-                    # Save file metadata to the database
-                    cursor = self.db.cursor()
-                    cursor.execute("""
-                        INSERT INTO files (file_name, file_path, sender, recipient, chat_type)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (file_name, str(save_path), sender, recipient, chat_type))
-                    self.db.commit()
+                        # Determine the file type
+                        file_type, _ = mimetypes.guess_type(file_name)
 
-                    # Notify the recipient(s)
-                    if receiver == "group":
-                         broadcast(set(self.connected_clients.keys()).difference({client}),  json.dumps({
-                                "type": "file_upload",
-                                "file_name": file_name,
-                                "sender": sender,
-                                "content": f"File '{file_name}' uploaded by {sender}."
-                            }))
-                    elif receiver == "private":
-                         for cli, user in self.connected_clients.items():
-                            if user.username == recipient:
-                                data = {
-                                        "type": "file_upload",
-                                        "file_name": file_name,
-                                        "sender": sender,
-                                        "content": f"File '{file_name}' received from {sender}."
-                                    }
-                                await cli.send(json.dumps(data))
-                                break
-                    continue
+                        # Save file metadata to the database
+
+
+                        # Notify the recipient(s)
+                        if receiver == "group":
+                            cursor = self.db.cursor()
+                            cursor.execute("""
+                                INSERT INTO files (file_name, file_path, file_type, sender, recipient, chat_type)
+                                VALUES (?, ?, ?, ?, ?, ?)
+                            """, (file_name, str(save_path), file_type, sender, recipient, chat_type))
+                            self.db.commit()
+                            broadcast(set(self.connected_clients.keys()).difference({client}),  json.dumps({
+                                    "type": "file_upload",
+                                    "file_name": file_name,
+                                    "file_type": file_type,  # Include file type in the notification
+                                    "sender": sender,
+                                    "content": f"File '{file_name}' uploaded by {sender}."
+                                }))
+                        elif receiver == "private":
+                            username = self.connected_clients[client].username
+                            conversation_id = "_".join(sorted([username, recipient]))  # Generate conversation_id
+                            cursor = self.db.cursor()
+                            cursor.execute("""
+                                    INSERT INTO files (file_name, file_path, file_type, sender, recipient, chat_type, conversation_id)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                                """, (file_name, str(save_path), file_type, sender, recipient, chat_type, conversation_id))  # Include conversation_id
+                            self.db.commit()
+                            for cli, user in self.connected_clients.items():
+                                if user.username == recipient:
+                                    data = {
+                                            "type": "file_upload",
+                                            "file_name": file_name,
+                                            "file_type": file_type,  # Include file type in the notification
+                                            "sender": sender,
+                                            "content": f"File '{file_name}' received from {sender}."
+                                        }
+                                    await cli.send(json.dumps(data))
+                                    break
+                        continue
 
                 if not rate_limiter.can_send_message():
                     msg_json = {

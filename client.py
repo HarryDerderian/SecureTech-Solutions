@@ -17,7 +17,7 @@ from PIL import Image, ImageTk
 
 class Client:
     def __init__(self, gui) :
-        self.URI = "wss://localhost:7778"
+        self.URI = "wss://192.168.69.3:7778"
         self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         self.gui = gui
         self.key_pem = pathlib.Path(__file__).with_name("key.pem")
@@ -86,6 +86,12 @@ class Client:
                             self.gui.update_chat(msg_json, True)
                             continue 
                         
+                        elif msg_json.get("type") == "load_files":
+                            files = msg_json.get("content", [])
+                            self.gui.update_chatbox_with_files(files) 
+                            continue
+
+
                         # Normal message 
                         elif msg_json.get("type") == "group" or msg_json.get("type") == "server":
                             if msg_json.get("username") and msg_json.get("type") == "server":
@@ -382,21 +388,32 @@ class ChatPage(BasePage):
         self.chat_display.place(x=220, y=20, width=800, height=550)
 
         # Tags for Italic and Bold
+        self.chat_display.tag_configure("red_text", foreground="red")
         self.chat_display.tag_configure("italic", font=("Lucida Console", 14, "italic"))
-        self.chat_display.tag_configure("bold", font=("Lucida Console", 14, "bold")) # Use Arial for bold text
+        self.chat_display.tag_configure("bold", font=("Lucida Console", 14, "bold")) 
         self.chat_display.tag_configure("underline", font=("Lucida Console", 14, "underline"))
-        self.chat_display.tag_configure("link", foreground="blue", underline=True)
+        #self.chat_display.tag_configure("link", foreground="blue", underline=True)
+        self.chat_display.tag_configure("url_link", foreground="blue", underline=True)
+        self.chat_display.tag_configure("file_link", foreground="red", underline=True)
+        self.chat_display.tag_bind("url_link", "<Button-1>", self.open_url)
+        self.chat_display.tag_bind("file_link", "<Button-1>", self.open_file_link)
 
-        self.chat_display.tag_bind("link", "<Button-1>", self.open_link)
 
-
-    def open_link(self, event):
+    def open_url(self, event):
         index = self.chat_display.index(f"@{event.x},{event.y}")
         tags = self.chat_display.tag_names(index)
-        if "link" in tags:
-            start, end = self.chat_display.tag_prevrange("link", index)
+        if "url_link" in tags:
+            start, end = self.chat_display.tag_prevrange("url_link", index)
             url = self.chat_display.get(start, end)
-            webbrowser.open(url) # Open the URL in default web browser
+            webbrowser.open(url)
+
+    def open_file_link(self, event):
+            index = self.chat_display.index(f"@{event.x},{event.y}")
+            tags = self.chat_display.tag_names(index)
+            if "file_link" in tags:
+                start, end = self.chat_display.tag_prevrange("file_link", index)
+                file_name = self.chat_display.get(start, end)
+                self.on_file_link_click(file_name)
 
     def clear_chatbox(self):
         if hasattr(self, 'chat_display') and self.chat_display.winfo_exists():
@@ -420,13 +437,10 @@ class ChatPage(BasePage):
                 sender = message.get("sender")
                 content = f"[+] File uploaded: {file_name} by {sender}"
 
-                # Insert the file name as a clickable link
-                self.chat_display.insert("end", content + "\n", "normal")
-                self.chat_display.insert("end", file_name, ("link",))
+                # Insert the file name as a clickable link (red)
+                self.chat_display.insert("end", content + "\n", "red_text")  # Apply red_text tag
+                self.chat_display.insert("end", file_name, ("file_link",))  # File link remains red
                 self.chat_display.insert("end", "\n", "normal")
-
-                # Bind the click event to the file name
-                self.chat_display.tag_bind("link", "<Button-1>", lambda event, file_name=file_name: self.on_file_link_click(file_name))
         else:
             i = 0
             length = len(message)
@@ -477,7 +491,7 @@ class ChatPage(BasePage):
                     url_match = re.match(r'(https?://[^\s]+)', message[i:])
                     if url_match:
                         url = url_match.group(0)
-                        self.chat_display.insert("end", url, "link")
+                        self.chat_display.insert("end", url, "url_link")
                         i += len(url)  # Skip past the link
                     else:
                         # If no valid link found, insert normal text
@@ -642,6 +656,13 @@ class GUI:
                 self.current_page.disconnect_button.config(text="Connecting", bg="#00FF00", fg="black", state="disabled")
                 # Start the connection process in a new thread
                 threading.Thread(target=self.run_asyncio_loop, daemon=True).start()
+
+
+    def update_chatbox_with_files(self, files):
+        """Update the chat display with the list of previous files."""
+        if self.current_page == self.pages["main"] or self.current_page == self.pages["dm"]:
+            for file in files:
+                self.current_page.update_chatbox(file, is_file=True)
 
 
     def lock_ui(self):

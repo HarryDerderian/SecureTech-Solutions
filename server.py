@@ -87,7 +87,7 @@ class Server :
         self.connected_clients = {} 
         self.connections_per_ip = {} # ip : total connections
         self.PORT = 7778 
-        self.HOST = "localhost"
+        self.HOST = "192.168.69.3"
         self.db = sqlite3.connect("securechat.db")
         self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         self.key_pem = pathlib.Path(__file__).with_name("key.pem")
@@ -325,12 +325,12 @@ class Server :
                     elif receiver == "private":
                          for client, user in self.connected_clients.items():
                             if user.username == recipient:
-                                data = json.dumps({
+                                data = {
                                         "type": "file_upload",
                                         "file_name": file_name,
                                         "sender": sender,
                                         "content": f"File '{file_name}' received from {sender}."
-                                    })
+                                    }
                                 await client.send(json.dumps(data))
                                 break
                     continue
@@ -391,7 +391,8 @@ class Server :
                     await client.send(json.dumps(msg_json))
             except Exception as e:
                 print(f"Error reading file: {e}")
-                await client.send(json.dumps({
+                await client.send(json.dumps(
+                    {
                     "type": "server",
                     "content": f"Error downloading file '{file_name}'."
                 }))

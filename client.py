@@ -346,6 +346,33 @@ class BasePage(Frame):
         """Hide the page."""
         self._main_window.lower()
 
+class AuthPage(BasePage) :
+
+    def __init__(self, root, main_app) :
+        super().__init__(root, main_app)
+        self.build_password_input()
+        self.build_user_input()
+        self.build_login_button()
+
+    def build_password_input(self) :
+        self.pass_label = Label(self._main_window, font=("Arial", 12), bg=self._BACKGROUND_COLOR,fg="white", text="Password")
+        self.pass_label.place(x= 405, y = 376)
+        self.pass_input = Entry(self._main_window, show="*", font=("Arial", 20), bg="gray20", fg="white", insertbackground="#00FF00")
+        self.pass_input.place(x= 400, y = 400)
+
+    def build_user_input(self) :
+        self.user_label = Label(self._main_window, font=("Arial", 12), bg=self._BACKGROUND_COLOR,fg="white", text="Username")
+        self.user_label.place(x= 405, y = 226)
+        self.user_input = Entry(self._main_window, font=("Arial", 20), bg="gray20", fg="white", insertbackground="#00FF00")
+        self.user_input.place(x= 400, y = 250)
+
+    def build_login_button(self) :
+        self.login_button = Button(
+            self._main_window, text="Login", font=("Lucida Console", 14),
+            bg="#00FF00", fg="black", command=self._main_app.quit
+        )
+        self.login_button.place(x=490, y=500, width=120, height=50)
+
 
 
 class ChatPage(BasePage):
@@ -631,9 +658,10 @@ class GUI:
         self.loop = None
         self.pages = {}  # Dictionary to store pages
         self.current_page = None  # Track the current page
-      #  self.pages["login"] = LoginPage(self.root, self)
+        self.pages["auth"] = AuthPage(self.root, self)
         self.pages["main"] = ChatPage(self.root, self)
         self.switch_page("main")
+        self.switch_page("auth")
         self.current_dm_recipient = None
 
         self.root.mainloop()

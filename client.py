@@ -365,12 +365,14 @@ class AuthPage(BasePage) :
         super().__init__(root, main_app)
         self.build_password_input()
         self.build_user_input()
-        self.build_login_button()
+        self.build_toggle_button()
+       # self.build_login_button()
         self.build_signup_button()
         self.build_server_messages()
         self.build_regs_button()
         self.state = "L"
         self.toggle()
+
 
         
         
@@ -380,6 +382,11 @@ class AuthPage(BasePage) :
         self.pass_label.place(x= 405, y = 376)
         self.pass_input = Entry(self._main_window, show="*", font=("Arial", 20), bg="gray20", fg="white", insertbackground="#00FF00")
         self.pass_input.place(x= 400, y = 400)
+        # second confirmation password for user signup
+        self.pass_conf_label = Label(self._main_window, font=("Arial", 12), bg=self._BACKGROUND_COLOR,fg="white", text="Confirm password")
+        self.pass_conf_label.place(x= 405, y = 456)
+        self.pass_conf_input = Entry(self._main_window, show="*", font=("Arial", 20), bg="gray20", fg="white", insertbackground="#00FF00")
+        self.pass_conf_input.place(x= 400, y = 480)
     
     # Builds the input box and the text label for the username input
     def build_user_input(self) :
@@ -389,18 +396,16 @@ class AuthPage(BasePage) :
         self.user_input.place(x= 400, y = 250)
 
     # builds the login button
-    def build_login_button(self) :
-        self.login_button = Button(
-            self._main_window, text="Login", font=("Lucida Console", 14),
-            bg="#00FF00", fg="black", command=self.send_auth
-        )
-        self.login_button.place(x=490, y=500, width=120, height=50)
+
 
 
     def send_auth(self) :
         username = self.user_input.get()
         password = self.pass_input.get()
-        
+        if self.state == "R" and not password == self.pass_conf_input.get() :
+            self.update_server_message("Passwords do not match.")
+            return
+
         json =  {
             "content" : self.state,
             "pass" : password,
@@ -412,22 +417,35 @@ class AuthPage(BasePage) :
     # builds the regisiter button
     def build_signup_button(self) :
             self.login_button = Button(
-                self._main_window, text="Sign up", font=("Lucida Console", 14),
+                self._main_window, text="Login", font=("Lucida Console", 14),
                 bg="#00FF00", fg="black", command=self.send_auth
             )
             self.login_button.place(x=490, y=600, width=120, height=50)
+
+    def build_toggle_button(self):
+            self.toggle_button = Button(
+                self._main_window, text="Sign up", font=("Lucida Console", 14),
+                bg="#00FF00", fg="black", command=self.toggle
+            )
+            self.toggle_button.place(x=150, y=50, width=300, height=50)
+
 
     
     def toggle(self) :
         if self.state == "L" :
             self.state = "R"
             self.login_button.place_forget()
-            self.regs_button.place(x=490, y=500, width=120, height=50)
-
+            self.regs_button.place(x=490, y=600, width=120, height=50)
+            self.pass_conf_label.place(x= 405, y = 456)
+            self.pass_conf_input.place(x= 400, y = 480)
+            self.toggle_button.config(text="Login instead")
         else :
             self.state = "L" 
             self.regs_button.place_forget()
+            self.pass_conf_label.place_forget()
+            self.pass_conf_input.place_forget()
             self.login_button.place(x=490, y=500, width=120, height=50)
+            self.toggle_button.config(text="Register instead")
 
     def build_server_messages(self):
         """Builds a more flexible server message display area"""
@@ -464,7 +482,7 @@ class AuthPage(BasePage) :
             self._main_window, text="Register", font=("Lucida Console", 14),
             bg="#00FF00", fg="black", command=self.send_auth
         )
-        self.login_button.place(x=490, y=500, width=120, height=50)
+        self.login_button.place(x=490, y=750, width=120, height=50)
     
 
 class ChatPage(BasePage):

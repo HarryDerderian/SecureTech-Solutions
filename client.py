@@ -8,7 +8,7 @@ import webbrowser
 import re
 import base64
 import os
-from tkinter import Tk, Frame, Label, Entry, Button, Text, END, Canvas, PhotoImage, DISABLED, NORMAL, RIGHT, LEFT, BOTH, WORD, X, Listbox, Toplevel
+from tkinter import Tk, Frame, Label, Entry, Button, Text, END, Canvas, PhotoImage, DISABLED, NORMAL, RIGHT, LEFT, BOTH, WORD, X, Listbox, Toplevel, Message
 
 from tkinter import filedialog
 
@@ -17,7 +17,7 @@ from PIL import Image, ImageTk
 
 class Client:
     def __init__(self, gui) :
-        self.URI = "wss://192.168.69.3:7778"
+        self.URI = "wss://127.0.0.1:7778"
         self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         self.gui = gui
         self.key_pem = pathlib.Path(__file__).with_name("key.pem")
@@ -77,7 +77,18 @@ class Client:
                             continue
 
 
-                        if msg_json.get("type") == "file_upload":
+                        if msg_json.get("type") == "auth" :
+                            context = msg_json.get("context")
+                            if context == "init" :
+                                self.gui.switch_page("auth")
+                                self.gui.connection_successful()
+                            elif context == "success" :
+                                self.gui.auth_complete(msg_json.get("content", ""))
+                                self.gui.connection_successful()
+                            elif context == "error" :
+                                self.gui.send_auth_info(msg_json.get("content", ""))    
+
+                        elif msg_json.get("type") == "file_upload":
                             print("file name")
                             file_name = msg_json.get("file_name")
                             print("file sender")
@@ -210,6 +221,7 @@ class Client:
                     self.connected = True
                     self.reconnect_attempts = 0  # Reset after a successful connection
                     self.gui.update_chat("[+] Connected to server.")
+                    print("connected")
                     self.connecting = False
                     self.gui.connection_successful()
 
@@ -222,6 +234,7 @@ class Client:
                     self.username = None
                     self.gui.update_logged_in_status("")
                     if not self.server_dc :
+                        self.gui.switch_page("main")
                         self.connecting = True
                         self.connected = False
                         self.gui.current_dm_recipient = None
@@ -239,7 +252,7 @@ class Client:
 
     async def dc(self):
         if self.connected:  
-            await self.switch_chat_mode("group") # reset the state of the gui
+            await self.switch_chat_mode("main") # reset the state of the gui
             self.gui.current_dm_recipient = None 
             self.connected = False
             self.server_dc = True  
@@ -353,27 +366,106 @@ class AuthPage(BasePage) :
         self.build_password_input()
         self.build_user_input()
         self.build_login_button()
+        self.build_signup_button()
+        self.build_server_messages()
+        self.build_regs_button()
+        self.state = "L"
+        self.toggle()
 
+        
+        
+    # Builds the input box and the text label for the password input
     def build_password_input(self) :
         self.pass_label = Label(self._main_window, font=("Arial", 12), bg=self._BACKGROUND_COLOR,fg="white", text="Password")
         self.pass_label.place(x= 405, y = 376)
         self.pass_input = Entry(self._main_window, show="*", font=("Arial", 20), bg="gray20", fg="white", insertbackground="#00FF00")
         self.pass_input.place(x= 400, y = 400)
-
+    
+    # Builds the input box and the text label for the username input
     def build_user_input(self) :
         self.user_label = Label(self._main_window, font=("Arial", 12), bg=self._BACKGROUND_COLOR,fg="white", text="Username")
         self.user_label.place(x= 405, y = 226)
         self.user_input = Entry(self._main_window, font=("Arial", 20), bg="gray20", fg="white", insertbackground="#00FF00")
         self.user_input.place(x= 400, y = 250)
 
+    # builds the login button
     def build_login_button(self) :
         self.login_button = Button(
             self._main_window, text="Login", font=("Lucida Console", 14),
-            bg="#00FF00", fg="black", command=self._main_app.quit
+            bg="#00FF00", fg="black", command=self.send_auth
         )
         self.login_button.place(x=490, y=500, width=120, height=50)
 
 
+    def send_auth(self) :
+        username = self.user_input.get()
+        password = self.pass_input.get()
+        
+        json =  {
+            "content" : self.state,
+            "pass" : password,
+            "user" : username
+        }
+        self._main_app.auth(json)
+
+
+    # builds the regisiter button
+    def build_signup_button(self) :
+            self.login_button = Button(
+                self._main_window, text="Sign up", font=("Lucida Console", 14),
+                bg="#00FF00", fg="black", command=self.send_auth
+            )
+            self.login_button.place(x=490, y=600, width=120, height=50)
+
+    
+    def toggle(self) :
+        if self.state == "L" :
+            self.state = "R"
+            self.login_button.place_forget()
+            self.regs_button.place(x=490, y=500, width=120, height=50)
+
+        else :
+            self.state = "L" 
+            self.regs_button.place_forget()
+            self.login_button.place(x=490, y=500, width=120, height=50)
+
+    def build_server_messages(self):
+        """Builds a more flexible server message display area"""
+        self.serverMessage = Label(
+            self._main_window,
+            text="", 
+            font=("Lucida Console", 12),
+            bg=self._BACKGROUND_COLOR,
+            fg="red",
+            wraplength=300,  # Allows text to wrap if too long
+            justify=LEFT,  # Aligns text to left
+            anchor="w"  # Anchors text to west (left)
+        )
+        # More flexible placement using grid or pack instead of absolute placement
+        self.serverMessage.place(relx=0.5, rely=0.1, anchor="n", width=350, height=80)
+
+    def update_server_message(self, message, is_error=True):
+        """Updates server message with optional error styling"""
+        self.serverMessage.config(text=message)
+        
+        # Change color based on message type
+        if is_error:
+            self.serverMessage.config(fg="red")
+        else:
+            self.serverMessage.config(fg="green")
+        
+        # Auto-clear after some time for non-critical messages
+        if not is_error:
+            self._main_window.after(5000, lambda: self.serverMessage.config(text=""))
+
+    
+    def build_regs_button(self) :
+        self.regs_button = Button(
+            self._main_window, text="Register", font=("Lucida Console", 14),
+            bg="#00FF00", fg="black", command=self.send_auth
+        )
+        self.login_button.place(x=490, y=500, width=120, height=50)
+    
 
 class ChatPage(BasePage):
     def __init__(self, root, main_app):
@@ -661,7 +753,7 @@ class GUI:
         self.pages["auth"] = AuthPage(self.root, self)
         self.pages["main"] = ChatPage(self.root, self)
         self.switch_page("main")
-        self.switch_page("auth")
+        #$self.switch_page("auth")
         self.current_dm_recipient = None
 
         self.root.mainloop()
@@ -678,7 +770,7 @@ class GUI:
         if self.current_page.disconnect_button.cget("text") == "Connecting":
             return  # Exit the function if already connecting
 
-        if self.current_page == self.pages["main"]:
+        if self.current_page == self.pages["main"] or self.current_page == self.pages["auth"]:
                 self.client.server_dc = False
                 self.client.connected = False
                 self.current_page.disconnect_button.config(text="Connecting", bg="#00FF00", fg="black", state="disabled")
@@ -725,10 +817,11 @@ class GUI:
             # Handle any errors that occur during the connection process
             print(f"Connection failed: {e}")
             self.root.after(0, self.update_button_failed)
+            self.root.after(0, self.switch_page("main"))
 
     def update_button_connected(self):
         """Update the button to reflect a successful connection."""
-        if self.current_page == self.pages["main"]:
+        if self.current_page == self.pages["main"] or self.pages["auth"] == self.current_page:
             self.current_page.disconnect_button.config(text="Disconnect", bg="#FF0000", fg="white", state="normal")
 
     def update_button_failed(self):
@@ -769,15 +862,23 @@ class GUI:
             # Send the message to the server
             asyncio.run_coroutine_threadsafe(self.client.send_message(msg_json), self.loop)
     
-    
+    def auth(self, json) :
+        if self.loop is not None:
+            asyncio.run_coroutine_threadsafe(
+                self.client.send_message(json), self.loop
+            )
+        else:
+            print("[!] Event loop is not running.")
+
 
     def quit(self):
         self.root.quit()
         self.root.destroy()
 
     def update_chat(self, message, is_file=None ):
-        if self.current_page == self.pages["main"] or self.current_page == self.pages["dm"]:
+        if self.current_page == self.pages["main"] or self.current_page == self.pages["auth"]:
                 print("inside update chat")
+                print(message)
                 self.current_page.update_chatbox(message,is_file)
 
     def switch_page(self, page_name):
@@ -837,10 +938,10 @@ class GUI:
     def switch_to_group_chat(self):
         """Switch back to the main group chat."""
         self.current_dm_recipient = None
-        self.current_page.update_chatbox("[+] Switched back to group chat.")
+        #self.current_page.update_chatbox("[+] Switched back to group chat.")
         if self.loop is not None:
             asyncio.run_coroutine_threadsafe(
-                self.client.switch_chat_mode("group"), self.loop
+                self.client.switch_chat_mode("main"), self.loop
             )
         else:
             print("[!] Event loop is not running.")
@@ -853,6 +954,13 @@ class GUI:
             )
         else:
             print("[!] Event loop is not running.")
+
+    def send_auth_info(self, message) :
+        self.pages["auth"].update_server_message(message)
+
+    def auth_complete(self, message) :
+        self.switch_page("main")
+        self.update_chat(message)
 
 
 

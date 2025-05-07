@@ -129,7 +129,9 @@ class Server :
 
 
     async def run(self):
-        server = await serve(self.handle_connection, self.HOST, self.PORT, ssl = self.ssl_context,  max_size=100 * 1024 * 1024)
+        server = await serve(self.handle_connection, self.HOST, self.PORT, 
+                             #ssl = self.ssl_context,  
+                             max_size=100 * 1024 * 1024)
         print(f"SecureTech Solutions: SecureChat\nServer listening on wss://{self.HOST}:{self.PORT}")
         await server.wait_closed()
 

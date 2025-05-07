@@ -93,7 +93,7 @@ class Server :
     def __init__(self) :
         self.connected_clients = {} 
         self.connections_per_ip = {}  # ip : total connections
-        self.PORT = int(os.environ.get("PORT", 8080))  # Use Render's dynamic port
+        self.PORT = int(os.environ.get("PORT", 443))  # Use Render's dynamic port
         self.HOST = "0.0.0.0"  # Bind to all interfaces
         print(f"Starting server on {self.HOST}:{self.PORT}") 
         self.db = sqlite3.connect("securechat.db")

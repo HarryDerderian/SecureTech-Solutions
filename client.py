@@ -17,7 +17,7 @@ from PIL import Image, ImageTk
 
 class Client:
     def __init__(self, gui) :
-        self.URI = "wss://54.191.253.12:7778"
+        self.URI = "wss://securechat.osscsuf.org:443"
         self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         self.gui = gui
         self.key_pem = pathlib.Path(__file__).with_name("key.pem")

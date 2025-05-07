@@ -92,13 +92,11 @@ def initialize_db():
 class Server :
     def __init__(self) :
         self.connected_clients = {} 
-        self.connections_per_ip = {} # ip : total connections
-        self.PORT = 8080 
-        self.HOST = "0.0.0.0"
+        self.connections_per_ip = {}  # ip : total connections
+        self.PORT = int(os.environ.get("PORT", 8080))  # Use Render's dynamic port
+        self.HOST = "0.0.0.0"  # Bind to all interfaces
+        print(f"Starting server on {self.HOST}:{self.PORT}") 
         self.db = sqlite3.connect("securechat.db")
-        self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        self.key_pem = pathlib.Path(__file__).with_name("key.pem")
-        self.ssl_context.load_cert_chain(self.key_pem)
         self.rate_limiter = {}
 
 

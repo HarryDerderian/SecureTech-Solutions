@@ -94,8 +94,7 @@ class Server :
         self.connected_clients = {} 
         self.connections_per_ip = {} # ip : total connections
         self.PORT = int(os.environ.get("PORT", 7778))  
-        self.HOST = "0.0.0.0"
-        print(f"Starting server on {self.HOST}:{self.PORT}") 
+        self.HOST = "54.191.253.12"
         self.db = sqlite3.connect("securechat.db")
         self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         self.key_pem = pathlib.Path(__file__).with_name("key.pem")

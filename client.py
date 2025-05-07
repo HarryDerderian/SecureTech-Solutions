@@ -17,7 +17,7 @@ from PIL import Image, ImageTk
 
 class Client:
     def __init__(self, gui) :
-        self.URI = "wss://127.0.0.1:7778"
+        self.URI = "wss://54.191.253.12:7778"
         self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         self.gui = gui
         self.key_pem = pathlib.Path(__file__).with_name("key.pem")
@@ -655,8 +655,6 @@ class ChatPage(BasePage):
         file_path = filedialog.askopenfilename()
         if file_path:
             self._main_app.upload_file(file_path)
-
-
 
 
     def _input_box(self):

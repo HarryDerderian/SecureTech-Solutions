@@ -97,11 +97,9 @@ class Server :
         self.HOST = "0.0.0.0"
         print(f"Starting server on {self.HOST}:{self.PORT}") 
         self.db = sqlite3.connect("securechat.db")
-        #self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        self.ssl_context = None
-        #self.key_pem = pathlib.Path(__file__).with_name("key.pem")
-        #self.ssl_context.load_cert_chain(self.key_pem)
-        self.ssl_context = None
+        self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        self.key_pem = pathlib.Path(__file__).with_name("key.pem")
+        self.ssl_context.load_cert_chain(self.key_pem)
         self.rate_limiter = {}
 
 

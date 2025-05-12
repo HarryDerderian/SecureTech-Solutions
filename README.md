@@ -1,7 +1,7 @@
 ## Running the Client (client.exe)
 To launch the chat client, simply double-click client.exe.
 
-##⚠️ Important Notice — False Positive Warning:
+⚠️ Important Notice — False Positive Warning:
 When you run the file, Windows SmartScreen or your antivirus may flag it. This happens because the executable is unsigned and from an unknown publisher.
 
 Click "More info", then "Run anyway" to continue.

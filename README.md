@@ -1,43 +1,28 @@
-# Project Documentation
-## Setting Up the Server
-To connect a client to the server, you need to host the server on an endpoint and assign an open port for it to listen on.
+Running the Client (client.exe)
+To launch the chat client, simply double-click client.exe.
 
-1) Open the server.py file.
-2) Modify the following lines to fit your setup:
-Set self.PORT = 7778.
-Set self.HOST = "localhost". (Change "localhost" to your server's IP address or domain).
-3) Ensure key.pem is in the same directory as server.py
+⚠️ Important Notice — False Positive Warning:
+When you run the file, Windows SmartScreen or your antivirus may flag it. This happens because the executable is unsigned and from an unknown publisher.
 
-## Setting Up the Client
-1) Open the client.py file.
-2) Set self.URI = "wss://localhost:7778". (Replace "localhost" and "7778" as needed).
-3) Ensure key.pem is in the same directory as client.py
+Click "More info", then "Run anyway" to continue.
 
-## Install Required Libraries Using pip
-1) Install the necessary libraries by running the following command:
-   pip install -r requirements.txt.
-(This needs to be done for both the client and server if they are on separate systems).
+This is a false positive — there is no malware in the application.
 
-## Running the Client
-Run the client by executing the following command:
-    python client.py
+What This Does
+Running client.exe will connect you to the online server and establish a secure, encrypted connection over TLS. Once connected, you’ll be able to chat with other users in real time using a clean, intuitive interface.
 
-## Running the Server
-Run the server by executing the following command:
-    python server.py
-(Ensure the server's listening port is not already in use)
+Requirements
+Windows OS is required.
 
-# Once the client is started, you will see four buttons on the right side.
+Internet access must be available to reach the online server.
 
-## To start the connection to the server, click the "Connect" button.
-You will be prompted to log in or register following the instructions provided by the server.
-The connect/disconnect button will allow you to disconnect and reconnect to the server. 
+Using the Interface
+Click "Connect" to begin the secure session with the server.
 
-## To Send Messages
-Enter text into the bottom gray rectangle, then click the "Send" button or hit "Enter".
+You’ll be prompted to log in or register if you haven’t already.
 
-## To Clear Your Chat
-Click the "Clear" button.
+Use the Send, Clear, and Close buttons as needed.
 
-## To Exit the Program
-Click the "Close" button or the "X" at the top right corner.
+Type messages into the gray input box and press Enter or click Send to communicate.
+
+The server is already online and configured to accept connections. Just launch the client and you’re ready to go.
